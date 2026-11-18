@@ -225,7 +225,7 @@ struct GameScreen: View {
             }
             .padding(.horizontal, 12)
             HStack(spacing: 0) {
-                DPad(size: pad * 0.78)
+                Joystick(size: pad * 0.9)
                     .frame(width: pad)
                 Spacer(minLength: 4)
                 SmallButtons(width: max(110, width - 2 * pad - 16))
@@ -243,7 +243,7 @@ struct GameScreen: View {
             ControlsToggle(shown: true)
             if companionButton { CompanionButton() }
             Spacer()
-            DPad(size: width * 0.88)
+            Joystick(size: width * 0.98)
             Spacer()
             HStack(spacing: 8) {
                 ControlButton(label: "SELECT", bit: PD_IOS_SELECT, size: CGSize(width: width * 0.42, height: 26), round: false)

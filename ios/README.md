@@ -26,7 +26,7 @@ the companion's is 320x240. The app picks whichever arrangement gives the game t
 it folds and turns:
 
 - **Stacked, buttons under**: the game over the companion, the touch buttons below (folded, upright).
-- **Stacked, buttons beside**: the same column, with the D-pad on the left and the buttons on the right (the Duo open,
+- **Stacked, buttons beside**: the same column, with the movement stick on the left and the buttons on the right (the Duo open,
   upright).
 - **Sideways**: held wider than tall, it's PokeDaisy's one-screen look. The game fills the screen with **EXPAND** (the
   overworld drawn past the GBA's edges) and the HUD. **Companion** (or the controller's X) opens the companion over the
@@ -42,7 +42,8 @@ window iOS gives it, held upright or sideways, and turns with the device on the 
 
 ## Controls
 
-On screen: the D-pad, A, B, L, R, SELECT, START, **MENU** (the QUICK MENU) and **FF** (fast-forward while held).
+On screen: a movement stick (it centres itself where your thumb lands; straight directions get the wider share, so
+walking a line is easy), A, B, L, R, SELECT, START, **MENU** (the QUICK MENU) and **FF** (fast-forward while held).
 Tap the companion to use it. Its SETTINGS tab has CLOSE GAME, which takes you back to the game list.
 
 A controller's buttons go by where they sit, as on a Nintendo pad:

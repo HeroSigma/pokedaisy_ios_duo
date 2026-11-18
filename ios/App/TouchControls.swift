@@ -94,6 +94,97 @@ struct DPad: View {
     }
 }
 
+/// A thumbstick for the D-pad: it centres itself where the thumb lands (anywhere in its area), the knob follows the thumb,
+/// and past the rim the centre is dragged along so turning back is quick. Straight directions get the wider share
+/// (60° each); between them a 30° band holds both, so walking a line is easy.
+struct Joystick: View {
+    @EnvironmentObject var emulator: Emulator
+    let size: CGFloat
+    @State private var origin: CGPoint?
+    @State private var knob: CGSize = .zero
+    @State private var dirs: UInt32 = 0
+    private static let all = UInt32(PD_IOS_UP | PD_IOS_DOWN | PD_IOS_LEFT | PD_IOS_RIGHT)
+
+    var body: some View {
+        let base = size * 0.72, radius = base * 0.42, knobSize = base * 0.46
+        let centre = origin ?? CGPoint(x: size / 2, y: size / 2)
+        ZStack {
+            Circle()
+                .fill(Color(white: 0.22).opacity(origin == nil ? 0.55 : 0.8))
+                .overlay(Circle().stroke(.white.opacity(0.18), lineWidth: 1.5))
+                .frame(width: base, height: base)
+                .position(centre)
+            ForEach(0..<4, id: \.self) { i in
+                arrow(i, centre: centre, reach: base * 0.4, size: base * 0.09)
+            }
+            Circle()
+                .fill(Color(white: origin == nil ? 0.38 : 0.55))
+                .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.4), radius: 3, y: 2)
+                .frame(width: knobSize, height: knobSize)
+                .position(x: centre.x + knob.width, y: centre.y + knob.height)
+        }
+        .frame(width: size, height: size)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    var o = origin ?? value.startLocation
+                    var dx = value.location.x - o.x, dy = value.location.y - o.y
+                    let d = hypot(dx, dy)
+                    if d > radius { // past the rim: the centre follows the thumb
+                        o.x += dx * (d - radius) / d
+                        o.y += dy * (d - radius) / d
+                        dx = value.location.x - o.x
+                        dy = value.location.y - o.y
+                    }
+                    origin = o
+                    knob = CGSize(width: dx, height: dy)
+                    set(dirsFor(dx: dx, dy: dy, radius: radius))
+                }
+                .onEnded { _ in
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        origin = nil
+                        knob = .zero
+                    }
+                    set(0)
+                }
+        )
+        .accessibilityLabel("Movement stick")
+    }
+
+    private static let arrowBits: [Int] = [PD_IOS_UP, PD_IOS_RIGHT, PD_IOS_DOWN, PD_IOS_LEFT]
+    private static let arrowX: [CGFloat] = [0, 1, 0, -1]
+    private static let arrowY: [CGFloat] = [-1, 0, 1, 0]
+
+    private func arrow(_ i: Int, centre: CGPoint, reach: CGFloat, size: CGFloat) -> some View {
+        let on = dirs & UInt32(Joystick.arrowBits[i]) != 0
+        let x: CGFloat = centre.x + Joystick.arrowX[i] * reach
+        let y: CGFloat = centre.y + Joystick.arrowY[i] * reach
+        return Image(systemName: "arrowtriangle.up.fill")
+            .font(.system(size: size))
+            .foregroundStyle(.white.opacity(on ? 1 : 0.4))
+            .rotationEffect(.degrees(Double(i) * 90))
+            .position(x: x, y: y)
+    }
+
+    private func dirsFor(dx: CGFloat, dy: CGFloat, radius: CGFloat) -> UInt32 {
+        if hypot(dx, dy) < radius * 0.3 { return 0 }
+        var bits: UInt32 = 0
+        // tan(30°): within 30° of an axis is that direction alone, the 30° between two axes both.
+        if abs(dx) > abs(dy) * 0.577 { bits |= UInt32(dx > 0 ? PD_IOS_RIGHT : PD_IOS_LEFT) }
+        if abs(dy) > abs(dx) * 0.577 { bits |= UInt32(dy > 0 ? PD_IOS_DOWN : PD_IOS_UP) }
+        return bits
+    }
+
+    private func set(_ bits: UInt32) {
+        guard bits != dirs else { return }
+        if bits & ~dirs != 0 { Haptics.tap() }
+        dirs = bits
+        emulator.touchButtons = (emulator.touchButtons & ~Joystick.all) | bits
+    }
+}
+
 /// A and B on a slant, as on the GBA.
 struct FaceButtons: View {
     let size: CGFloat
