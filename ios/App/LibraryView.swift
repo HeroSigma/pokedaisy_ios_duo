@@ -3,6 +3,7 @@ import SwiftUI
 struct LibraryView: View {
     @EnvironmentObject var library: Library
     @EnvironmentObject var emulator: Emulator
+    @State private var dropping = false
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,19 @@ struct LibraryView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(library.importMessage ?? "")
+            }
+            .onDrop(of: [.fileURL, .data], isTargeted: $dropping) { providers in
+                library.importDropped(providers)
+            }
+            .overlay {
+                if dropping {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
+                        .background(RoundedRectangle(cornerRadius: 16).fill(Color.accentColor.opacity(0.12)))
+                        .overlay(Text("Drop to add").font(.title3.bold()).foregroundStyle(.white))
+                        .padding(12)
+                        .allowsHitTesting(false)
+                }
             }
             .onAppear { library.refresh() }
         }
@@ -74,7 +88,7 @@ struct LibraryView: View {
                 .foregroundStyle(.secondary)
             Text("No games yet")
                 .font(.title3.bold())
-            Text("Tap + to add your own .gba, .gb or .gbc files (and their .sav files), or put them in the Files app under On My iPhone > PokeDaisy > ROMs. No games are included.")
+            Text("Tap + or drag them in from the Files app to add your own .gba, .gb or .gbc files (and their .sav files), or put them in the Files app under On My iPhone > PokeDaisy > ROMs. No games are included.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)

@@ -82,6 +82,45 @@ final class Library: ObservableObject {
         importMessage = text
     }
 
+    /// Files dropped on the library (dragged from the Files app): each provider's file is copied out while its temporary
+    /// copy exists, then they're all imported together like picked ones.
+    func importDropped(_ providers: [NSItemProvider]) -> Bool {
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var copies: [URL] = []
+        let staging = FileManager.default.temporaryDirectory.appendingPathComponent("dropped-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        var any = false
+        for provider in providers {
+            let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .data) == true }
+                ?? UTType.data.identifier
+            any = true
+            group.enter()
+            let suggested = provider.suggestedName
+            provider.loadFileRepresentation(forTypeIdentifier: type) { url, _ in
+                defer { group.leave() }
+                guard let url else { return }
+                var name = url.lastPathComponent
+                if !Library.extensions.contains(url.pathExtension.lowercased()) && url.pathExtension.lowercased() != "sav",
+                   let suggested, !suggested.isEmpty {
+                    name = suggested.contains(".") ? suggested : suggested + "." + url.pathExtension
+                }
+                let target = staging.appendingPathComponent(name)
+                if (try? FileManager.default.copyItem(at: url, to: target)) != nil {
+                    lock.lock(); copies.append(target); lock.unlock()
+                }
+            }
+        }
+        group.notify(queue: .main) {
+            MainActor.assumeIsolated {
+                if !copies.isEmpty { self.importFiles(copies) }
+                else { self.importMessage = "Those files couldn't be read." }
+                try? FileManager.default.removeItem(at: staging)
+            }
+        }
+        return any
+    }
+
     static var importTypes: [UTType] {
         // Declared in Info.plist (UTImportedTypeDeclarations): an undeclared extension is only a dynamic type, which the
         // picker doesn't always take. Anything else (a ROM in a zip's folder, odd names) can still be picked as data.

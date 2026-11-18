@@ -22,6 +22,11 @@ struct PokeDaisyApp: App {
                 .environmentObject(library)
                 .environmentObject(emulator)
                 .preferredColorScheme(.dark)
+                // A file opened with PokeDaisy (Files' share sheet, or a tap on a .gba): added like a picked one.
+                .onOpenURL { url in
+                    guard url.isFileURL else { return }
+                    library.importFiles([url])
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {

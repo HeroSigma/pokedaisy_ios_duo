@@ -65,8 +65,8 @@ Keyboard: arrows, X = A, Z = B, A / S = L / R, Return = START, Backspace = SELEC
 Everything is in the Files app under **On My iPhone > PokeDaisy**:
 
 - `ROMs/`: your games (`.gba`, `.gb`, `.gbc`) and their battery saves beside them (`<game>.sav`, mGBA's layout, so a
-  save moves to and from mGBA, RetroArch and PokeDaisy on other devices). Add games with **+** in the game list or by
-  copying them in. No games are included.
+  save moves to and from mGBA, RetroArch and PokeDaisy on other devices). Add games with **+** in the game list, by dragging
+  them from the Files app onto the game list, with **Share > PokeDaisy** in Files, or by copying them in. No games are included.
 - `PokeDaisy/`: `settings.ini`, `states/`, `cheats/` (by the ROM's CRC32, mGBA's `.cheats` format), `nuzlocke/`, and
   `backups/<game>/`: the save is copied there before every start and every state load, the newest 10 kept.
 
