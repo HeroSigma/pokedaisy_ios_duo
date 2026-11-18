@@ -1,0 +1,152 @@
+import Foundation
+import QuartzCore
+import SwiftUI
+import UIKit
+
+/// The running game: pd_ios.c ticked once a display refresh on the main thread (CADisplayLink), its two pictures handed to
+/// the Metal views, its sound to AudioOut, the buttons from the touch controls and any game controller or keyboard.
+@MainActor
+final class Emulator: ObservableObject {
+    @Published private(set) var running = false
+    @Published private(set) var title = ""
+    @Published private(set) var gameBoy = false
+    @Published var showError = false
+    @Published var errorText = ""
+    @Published private(set) var controllerConnected = false
+
+    let top = PixelRenderer(width: Int(PD_IOS_TOP_W), height: Int(PD_IOS_TOP_H), format: .rgba8Unorm)
+    let bottom = PixelRenderer(width: Int(PD_IOS_BOTTOM_W), height: Int(PD_IOS_BOTTOM_H), format: .bgra8Unorm)
+
+    /// The on-screen controls' buttons (PD_IOS_* bits), set by TouchControls.
+    var touchButtons: UInt32 = 0
+    private let controllers = Controllers()
+    private let audio = AudioOut()
+    private var link: CADisplayLink?
+    private var lastTime: CFTimeInterval = 0
+    private var owed: Double = 0
+    private var paused = false
+    private var batteryTimer: Timer?
+
+    private static let frameTime = 1.0 / 60.0
+
+    init() {
+        controllers.onChange = { [weak self] connected in
+            Task { @MainActor in self?.controllerConnected = connected }
+        }
+        controllers.start()
+        controllerConnected = controllers.connected
+    }
+
+    func start(_ game: Game) {
+        var error = [CChar](repeating: 0, count: 256)
+        let ok = pd_ios_start(game.url.path, game.saveURL.path, &error, error.count)
+        guard ok else {
+            errorText = String(cString: error)
+            showError = true
+            return
+        }
+        title = String(cString: pd_ios_title())
+        gameBoy = pd_ios_game_boy()
+        touchButtons = 0
+        running = true
+        UIApplication.shared.isIdleTimerDisabled = true
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        updateBattery()
+        batteryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updateBattery() }
+        }
+        audio.start()
+        startLink()
+    }
+
+    func stop() {
+        stopLink()
+        audio.stop()
+        pd_ios_stop()
+        batteryTimer?.invalidate()
+        batteryTimer = nil
+        running = false
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    func pause() {
+        paused = true
+        link?.isPaused = true
+        if running { audio.pause() }
+    }
+
+    func resume() {
+        paused = false
+        guard running else { return }
+        lastTime = 0
+        audio.start()
+        link?.isPaused = false
+    }
+
+    func flushSave() {
+        pd_ios_flush_save()
+    }
+
+    /// A finger on the companion, in its 320x240 pixels (nil = lifted).
+    func touchCompanion(_ point: CGPoint?) {
+        if let p = point {
+            pd_ios_touch(Int32(p.x), Int32(p.y), true)
+        } else {
+            pd_ios_touch(0, 0, false)
+        }
+    }
+
+    private func startLink() {
+        stopLink()
+        let proxy = LinkProxy { [weak self] link in self?.step(link) }
+        let link = CADisplayLink(target: proxy, selector: #selector(LinkProxy.tick(_:)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 60, preferred: 60)
+        link.add(to: .main, forMode: .common)
+        link.isPaused = paused
+        self.link = link
+        lastTime = 0
+        owed = 0
+        pd_ios_set_refresh(60)
+    }
+
+    private func stopLink() {
+        link?.invalidate()
+        link = nil
+    }
+
+    /// One refresh: a tick of the game when a 60th of a second is owed (a ProMotion screen may call twice as often).
+    private func step(_ link: CADisplayLink) {
+        guard running else { return }
+        let now = link.timestamp
+        if lastTime == 0 { lastTime = now - Emulator.frameTime }
+        let dt = min(now - lastTime, 0.25)
+        lastTime = now
+        owed += dt
+        guard owed >= Emulator.frameTime * 0.75 else { return }
+        owed = min(owed - Emulator.frameTime, Emulator.frameTime)
+
+        pd_ios_set_buttons(touchButtons | controllers.buttons)
+        let result = pd_ios_tick(UInt32((dt * 1000).rounded()))
+        if result & Int32(PD_IOS_TOP_CHANGED) != 0 { top.upload(pd_ios_top()) }
+        if result & Int32(PD_IOS_BOTTOM_CHANGED) != 0 { bottom.upload(pd_ios_bottom()) }
+        if result & Int32(PD_IOS_LEAVE) != 0 { stop() }
+    }
+
+    private func updateBattery() {
+        let device = UIDevice.current
+        let level = device.batteryLevel
+        let pct = level < 0 ? -1 : Int32((level * 100).rounded())
+        let charging = device.batteryState == .charging || device.batteryState == .full
+        pd_ios_set_battery(pct, charging)
+    }
+}
+
+/// CADisplayLink holds its target strongly: this keeps the emulator out of that.
+/// It's added to the main run loop, so its calls come on the main thread.
+private final class LinkProxy: NSObject {
+    let body: @MainActor (CADisplayLink) -> Void
+    init(_ body: @escaping @MainActor (CADisplayLink) -> Void) { self.body = body }
+    @objc func tick(_ link: CADisplayLink) {
+        MainActor.assumeIsolated { body(link) }
+    }
+}

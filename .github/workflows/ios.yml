@@ -1,0 +1,76 @@
+name: iPhone
+# The iPhone app (ios/): its C side run headless on the diagnostic ROMs, then an unsigned .ipa for sideloading
+# (AltStore / SideStore sign it with the player's own Apple ID). The .ipa is the run's PokeDaisy-iOS artifact.
+on:
+  pull_request:
+    paths: ['ios/**', '3ds/core/**', '3ds/host/**', '3ds/emu/pd_dispatch.c', '3ds/emu/pd_armgba.h', '3ds/emu/pd_gpsp.h', 'app/src/main/cpp/**', 'linux/*.c', 'linux/*.h', 'third_party/mgba', 'gamedata/**', '.github/workflows/ios.yml']
+  push:
+    branches: [main, dev]
+    paths: ['ios/**', '3ds/core/**', '3ds/host/**', '3ds/emu/pd_dispatch.c', '3ds/emu/pd_armgba.h', '3ds/emu/pd_gpsp.h', 'app/src/main/cpp/**', 'linux/*.c', 'linux/*.h', 'third_party/mgba', 'gamedata/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - run: git submodule update --init --depth 1 third_party/mgba
+      - name: Build the C side and its smoke test
+        run: |
+          cmake -S ios/core -B "$RUNNER_TEMP/ios-core" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/ios-core" --target pd_ios_smoke -j2
+      - name: Run it on the diagnostic ROMs
+        run: |
+          cd "$RUNNER_TEMP"
+          python3 "$GITHUB_WORKSPACE/linux/make_diagnostic.py"
+          for rom in diagnostic.gba diagnostic.gb; do
+            "$RUNNER_TEMP/ios-core/pd_ios_smoke" "$rom" "out-$rom"
+          done
+
+  ipa:
+    needs: smoke
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - run: git submodule update --init --depth 1 third_party/mgba
+      - name: Tools
+        run: |
+          xcodebuild -version
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: The C side for arm64 iPhones
+        run: sh ios/build_core.sh
+      - name: The app (unsigned)
+        run: |
+          xcodegen generate --spec ios/project.yml
+          xcodebuild -project ios/PokeDaisy.xcodeproj -scheme PokeDaisy -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -60; tail -40 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+          grep -E "warning: .*/ios/App/" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -40 || true
+          tail -3 "$RUNNER_TEMP/xcodebuild.log"
+      - name: Package the .ipa
+        run: |
+          app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/PokeDaisy.app"
+          test -d "$app"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry PokeDaisy-iOS.ipa Payload)
+          ls -la "$RUNNER_TEMP/ipa/PokeDaisy-iOS.ipa"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: PokeDaisy-iOS
+          path: ${{ runner.temp }}/ipa/PokeDaisy-iOS.ipa
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
