@@ -1,0 +1,93 @@
+{
+  "name": "PokeDaisy for iPhone (unofficial port)",
+  "identifier": "io.github.pgrace34.pokedaisy_ios_duo",
+  "sourceURL": "https://raw.githubusercontent.com/pgrace34/pokedaisy_ios_duo/sidestore/source.json",
+  "subtitle": "iPhone builds of PokeDaisy, laid out for the iPhone Duo",
+  "description": "Unofficial iPhone builds of PokeDaisy from https://github.com/pgrace34/pokedaisy_ios_duo (branch ios-duo). PokeDaisy is by lidor30 (https://github.com/lidor30/pokedaisy); this port isn't the official app, so report problems with it to the fork. No games are included: play your own.",
+  "website": "https://github.com/pgrace34/pokedaisy_ios_duo/tree/ios-duo/ios",
+  "iconURL": "https://raw.githubusercontent.com/pgrace34/pokedaisy_ios_duo/ios-duo/ios/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "tintColor": "3C94FA",
+  "apps": [
+    {
+      "name": "PokeDaisy",
+      "bundleIdentifier": "com.pokedaisy.ios",
+      "developerName": "pgrace34 (port of PokeDaisy by lidor30)",
+      "subtitle": "Your Pokemon game and a live companion, side by side",
+      "localizedDescription": "Plays your own GBA, Game Boy and Game Boy Color games with PokeDaisy's live companion beside the game: party, bag, map, guide, Pokedex, battle info and more. Laid out for the iPhone Duo (game and companion on screen together, folded or open) and works on other iPhones. Early preview. Source and notes: https://github.com/pgrace34/pokedaisy_ios_duo/tree/ios-duo/ios",
+      "iconURL": "https://raw.githubusercontent.com/pgrace34/pokedaisy_ios_duo/ios-duo/ios/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "tintColor": "3C94FA",
+      "category": "games",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "0.1.14",
+          "buildVersion": "14",
+          "date": "2026-11-18T19:58:53Z",
+          "localizedDescription": "iPhone build 0.1.14 from ios-duo at 44c4c6494903: iPhone: controller binds, FF sound, R2 as a toggle, music alongside\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.14/PokeDaisy-iOS.ipa",
+          "size": 1769302,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.13",
+          "buildVersion": "13",
+          "date": "2026-11-18T15:57:51Z",
+          "localizedDescription": "iPhone build 0.1.13 from ios-duo at c10c82106779: iPhone: fast forward is a toggle\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.13/PokeDaisy-iOS.ipa",
+          "size": 1719895,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.12",
+          "buildVersion": "12",
+          "date": "2026-11-18T15:37:59Z",
+          "localizedDescription": "iPhone build 0.1.12 from ios-duo at 9e6bcb75c630: iPhone: a movement stick in place of the D-pad\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.12/PokeDaisy-iOS.ipa",
+          "size": 1719671,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.11",
+          "buildVersion": "11",
+          "date": "2026-11-18T15:34:19Z",
+          "localizedDescription": "iPhone build 0.1.11 from ios-duo at 7b70cd781939: iPhone: a notice when fast forward goes on and off\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.11/PokeDaisy-iOS.ipa",
+          "size": 1716301,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.10",
+          "buildVersion": "10",
+          "date": "2026-11-18T15:26:45Z",
+          "localizedDescription": "iPhone build 0.1.10 from ios-duo at c3c16c503c30: iPhone: drag games in from the Files app, or open them with PokeDaisy\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.10/PokeDaisy-iOS.ipa",
+          "size": 1716149,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.6",
+          "buildVersion": "6",
+          "date": "2026-11-18T14:48:23Z",
+          "localizedDescription": "iPhone build 0.1.6 from ios-duo at 819872f81195: iPhone: turn upright on the Duo's inner display; show / hide the touch buttons with a controller\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.6/PokeDaisy-iOS.ipa",
+          "size": 1675909,
+          "minOSVersion": "17.0"
+        },
+        {
+          "version": "0.1.5",
+          "buildVersion": "5",
+          "date": "2026-11-18T13:54:26Z",
+          "localizedDescription": "iPhone build 0.1.5 from ios-duo at 9feb0faa399e: iPhone: a SideStore source that updates with every ios-duo build\n\nUnsigned: install it with SideStore or AltStore (ios/README.md).",
+          "downloadURL": "https://github.com/pgrace34/pokedaisy_ios_duo/releases/download/ios-v0.1.5/PokeDaisy-iOS.ipa",
+          "size": 1660931,
+          "minOSVersion": "17.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": []
+}
