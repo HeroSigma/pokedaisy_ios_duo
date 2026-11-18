@@ -64,6 +64,7 @@ static uint32_t buttonsHeld, buttonsWas, withheld;
 static int focusHeldFor[4];
 static bool touching;
 static int touchX, touchY;
+static unsigned ffPressGap = 250; // ms since FF was last held
 static bool ffWas; // fast-forward on at the last tick: a notice when it changes
 static bool touchDown, touchPress; // touchPress: a finger landed since the last tick (kept even if it already lifted)
 
@@ -109,7 +110,55 @@ int pd_ios_audio_read(int16_t* out, int frames) {
     return n;
 }
 
-// mGBA's GBA sound, a chunk at a time; muted in fast-forward (as the 3DS has it).
+// The sound a tick makes is gathered here, then queued at the tick's end: at 1x as it is; in fast forward it holds
+// several frames' worth, so it's box-filtered down to the tick's length (SPED-UP, as the Android app's FF MUSIC has it:
+// the music plays faster and higher instead of going quiet). Outside a tick (a save finishing on the way out) it's dropped
+// in fast forward, as before.
+#define TICK_AUDIO_MAX 16384
+static int16_t tickAudio[TICK_AUDIO_MAX * 2];
+static int tickAudioN;
+static bool audioGather;
+
+static void audio_sink(const int16_t* samples, int n) {
+    if (!audioGather) {
+        if (!session.ff) ring_push(samples, n);
+        return;
+    }
+    if (n > TICK_AUDIO_MAX - tickAudioN) n = TICK_AUDIO_MAX - tickAudioN;
+    if (n <= 0) return;
+    memcpy(tickAudio + tickAudioN * 2, samples, (size_t) n * 2 * sizeof(int16_t));
+    tickAudioN += n;
+}
+
+static void audio_flush_tick(unsigned ms) {
+    int n = tickAudioN;
+    tickAudioN = 0;
+    if (n <= 0) return;
+    if (!session.ff) {
+        ring_push(tickAudio, n);
+        return;
+    }
+    int expected = (int) ((unsigned) PD_IOS_AUDIO_RATE * (ms ? ms : 16) / 1000);
+    if (expected < 1) expected = 1;
+    int k = (n + expected / 2) / expected;
+    if (k <= 1) {
+        ring_push(tickAudio, n);
+        return;
+    }
+    int out = n / k;
+    for (int i = 0; i < out; i++) {
+        int32_t l = 0, r = 0;
+        for (int j = 0; j < k; j++) {
+            l += tickAudio[(i * k + j) * 2];
+            r += tickAudio[(i * k + j) * 2 + 1];
+        }
+        tickAudio[i * 2] = (int16_t) (l / k);
+        tickAudio[i * 2 + 1] = (int16_t) (r / k);
+    }
+    ring_push(tickAudio, out);
+}
+
+// mGBA's GBA sound, a chunk at a time.
 static void post_audio(struct mAVStream* s, blip_t* left, blip_t* right) {
     (void) s;
     static int16_t chunk[AUDIO_CHUNK * 2];
@@ -117,15 +166,14 @@ static void post_audio(struct mAVStream* s, blip_t* left, blip_t* right) {
     if (n > AUDIO_CHUNK) n = AUDIO_CHUNK;
     blip_read_samples(left, chunk, n, true);
     blip_read_samples(right, chunk + 1, n, true);
-    if (!session.ff) ring_push(chunk, n);
+    audio_sink(chunk, n);
 }
 
 static void gb_audio_pump(void) {
     if (!gbAudioOn) return;
     static int16_t chunk[AUDIO_CHUNK * 2];
     int n;
-    while ((n = pk_gb_audio_read(&gbAudio, chunk, AUDIO_CHUNK)) > 0)
-        if (!session.ff) ring_push(chunk, n);
+    while ((n = pk_gb_audio_read(&gbAudio, chunk, AUDIO_CHUNK)) > 0) audio_sink(chunk, n);
 }
 
 // The display ticks a little faster or slower than the game's 59.73 frames a second, and the audio device's clock drifts
@@ -436,6 +484,8 @@ bool pd_ios_start(const char* romPath, const char* savePath, char* error, size_t
 
     buttonsHeld = buttonsWas = withheld = 0;
     ffWas = false;
+    ffPressGap = 250;
+    tickAudioN = 0;
     memset(focusHeldFor, 0, sizeof(focusHeldFor));
     touching = touchDown = touchPress = false;
     fpsFrames = fpsMs = 0;
@@ -700,9 +750,16 @@ int pd_ios_tick(unsigned ms) {
     uint32_t gameHeld = held & ~withheld & 0x3FF, gameDown = down & ~withheld & 0x3FF;
     struct pd_input in = { .held = gameHeld, .down = gameDown, .quickMenu = (down & PD_IOS_Y) && !session.ui.keyFocus,
                            .stickAngle = -1 };
-    // FF is a toggle: a press of FF (R2, Tab) turns it on, the next turns it off.
-    if (down & PD_IOS_ZR) session.ffToggled = !session.ffToggled;
+    // FF is a toggle: a press of FF (R2, Tab) turns it on, the next turns it off. An analog trigger can bounce back over
+    // its threshold as it's let go, which read as a second press (FF only while held): presses closer than 250 ms are one.
+    if ((down & PD_IOS_ZR) && ffPressGap >= 250) {
+        session.ffToggled = !session.ffToggled;
+        ffPressGap = 0;
+    }
+    if (held & PD_IOS_ZR) ffPressGap = 0;
+    else if (ffPressGap < 250) ffPressGap += ms;
     unsigned before = session.frame;
+    audioGather = true;
     pd_session_tick(&session, &in, ms);
     if (session.ff != ffWas) {
         // However it went on or off (FF held, the QUICK MENU's FF, the companion), a notice on the game says so.
@@ -713,6 +770,8 @@ int pd_ios_tick(unsigned ms) {
         pd_session_show(&session, text);
     }
     gb_audio_pump();
+    audioGather = false;
+    audio_flush_tick(ms);
     audio_follow();
     unsigned frames = session.frame - before;
     if ((frames || session.overlayShown || session.overlayDirty) && !pd_session_holds_frame(&session)) {

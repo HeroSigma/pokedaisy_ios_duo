@@ -46,7 +46,9 @@ On screen: a movement stick (it centres itself where your thumb lands; straight 
 walking a line is easy), A, B, L, R, SELECT, START, **MENU** (the QUICK MENU) and **FF** (fast-forward: a press turns it on, the next off).
 Tap the companion to use it. Its SETTINGS tab has CLOSE GAME, which takes you back to the game list.
 
-A controller's buttons go by where they sit, as on a Nintendo pad:
+A controller's buttons go by where they sit, as on a Nintendo pad, until you change them: **Buttons** (in the bar under
+the game while the on-screen buttons are hidden) or the controller icon in the game list opens CONTROLLER BUTTONS. Tap
+an action, then press the button you want for it. The defaults:
 
 | Controller | PokeDaisy |
 | --- | --- |
@@ -59,7 +61,10 @@ A controller's buttons go by where they sit, as on a Nintendo pad:
 | R2 | fast-forward on / off |
 | Menu / Options | START / SELECT |
 
-Keyboard: arrows, X = A, Z = B, A / S = L / R, Return = START, Backspace = SELECT, C = X, Q = QUICK MENU, Tab = FF.
+Fast forward plays the game's sound sped up rather than muting it. The game's sound mixes with your own music, and the
+game keeps running while Control Center is open.
+
+Keyboard (not rebindable yet): arrows, X = A, Z = B, A / S = L / R, Return = START, Backspace = SELECT, C = X, Q = QUICK MENU, Tab = FF.
 
 ## Your files
 

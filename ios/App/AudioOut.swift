@@ -6,6 +6,8 @@ final class AudioOut {
     private let engine = AVAudioEngine()
     private var node: AVAudioSourceNode?
     private let scratch: UnsafeMutablePointer<Int16>
+    private var observers: [NSObjectProtocol] = []
+    private var wanted = false // started and not paused / stopped: what an interruption's end goes back to
     private static let maxFrames = 4096
 
     init() {
@@ -33,16 +35,32 @@ final class AudioOut {
         self.node = node
         engine.attach(node)
         engine.connect(node, to: engine.mainMixerNode, format: format)
+        // Another app's sound (a call, an alarm, Siri) can stop the engine; music started alongside shouldn't, but if
+        // anything does, the game's sound comes back when it's over, mixed in with whatever is playing.
+        let center = NotificationCenter.default
+        for name in [AVAudioSession.interruptionNotification, AVAudioSession.mediaServicesWereResetNotification,
+                     .AVAudioEngineConfigurationChange] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                guard let self, self.wanted else { return }
+                if note.name == AVAudioSession.interruptionNotification,
+                   let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                   AVAudioSession.InterruptionType(rawValue: raw) == .began { return }
+                self.start()
+            })
+        }
     }
 
     deinit {
+        for o in observers { NotificationCenter.default.removeObserver(o) }
         scratch.deallocate()
     }
 
     func start() {
         let session = AVAudioSession.sharedInstance()
-        // A game's sound: quiet with the ring / silent switch, mixed with what else is playing.
-        try? session.setCategory(.ambient, mode: .default, options: [])
+        // A game's sound: quiet with the ring / silent switch, mixed with what else is playing (your own music keeps
+        // playing alongside the game, and the game alongside it).
+        wanted = true
+        try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
         try? session.setPreferredIOBufferDuration(0.01)
         try? session.setActive(true)
         if !engine.isRunning {
@@ -52,10 +70,12 @@ final class AudioOut {
     }
 
     func pause() {
+        wanted = false
         engine.pause()
     }
 
     func stop() {
+        wanted = false
         engine.stop()
     }
 }

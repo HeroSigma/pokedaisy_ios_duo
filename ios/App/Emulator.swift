@@ -88,7 +88,9 @@ final class Emulator: ObservableObject {
         }
         return held
     }
-    private let controllers = Controllers()
+    let controllers = Controllers()
+    /// CONTROLLER BUTTONS is open.
+    @Published var showsBindings = false
     private let audio = AudioOut()
     private var link: CADisplayLink?
     private var lastTime: CFTimeInterval = 0

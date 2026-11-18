@@ -43,8 +43,9 @@ int main(int argc, char** argv) {
     }
     printf("title '%s' supported %d gameboy %d\n", pd_ios_title(), pd_ios_supported(), pd_ios_game_boy());
     pd_ios_set_battery(80, false);
+    bool gameBoy = pd_ios_game_boy(); // the GBA diagnostic plays no sound
 
-    int failures = 0, tops = 0, bottoms = 0, sound = 0;
+    int failures = 0, tops = 0, bottoms = 0, sound = 0, soundFf = 0;
     bool tapped = false;
     static int16_t audio[800 * 2];
     for (int i = 0; i < 600; i++) {
@@ -61,7 +62,10 @@ int main(int argc, char** argv) {
         if (r & PD_IOS_TOP_CHANGED) tops++;
         if (r & PD_IOS_BOTTOM_CHANGED) bottoms++;
         if (r & PD_IOS_LEAVE) printf("leave asked at %d\n", i);
-        sound += pd_ios_audio_read(audio, 800); // the audio thread, about a refresh's worth
+        int got = pd_ios_audio_read(audio, 800); // the audio thread, about a refresh's worth
+        sound += got;
+        if (i >= 420 && i < 460) // fast forward plays its sound sped up, not muted
+            for (int k = 0; k < got * 2; k++) if (audio[k] > 64 || audio[k] < -64) { soundFf++; break; }
         if (i == 430 && !pd_ios_ff_on()) printf("FAIL: FF didn't stay on after a press\n"), failures++;
         if (i == 470 && pd_ios_ff_on()) printf("FAIL: FF didn't go off on the second press\n"), failures++;
         if (i == 410 || i == 470) {
@@ -101,6 +105,8 @@ int main(int argc, char** argv) {
 
     if (!tops || topColours < 2) printf("FAIL: the game's pane stayed blank\n"), failures++;
     if (!bottoms || bottomColours < 2) printf("FAIL: the companion's pane stayed blank\n"), failures++;
+    printf("ticks with sound in fast forward %d of 40\n", soundFf);
+    if (gameBoy && soundFf < 30) printf("FAIL: fast forward went quiet (%d ticks with sound)\n", soundFf), failures++;
     if (sound < 600 * 600) printf("FAIL: too little sound (%d frames)\n", sound), failures++;
 
     // Sideways: the game alone with its own ASPECT (EXPAND), kept apart from the two-pane one.

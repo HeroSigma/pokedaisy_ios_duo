@@ -4,6 +4,7 @@ struct LibraryView: View {
     @EnvironmentObject var library: Library
     @EnvironmentObject var emulator: Emulator
     @State private var dropping = false
+    @State private var bindings = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +27,13 @@ struct LibraryView: View {
             .background(Color(white: 0.07))
             .navigationTitle("PokeDaisy")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        bindings = true
+                    } label: {
+                        Label("Controller buttons", systemImage: "gamecontroller")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         addGames()
@@ -38,6 +46,9 @@ struct LibraryView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(library.importMessage ?? "")
+            }
+            .sheet(isPresented: $bindings) {
+                ControllerBindingsView(controllers: emulator.controllers, pollsItself: true)
             }
             .onDrop(of: [.fileURL, .data], isTargeted: $dropping) { providers in
                 library.importDropped(providers)

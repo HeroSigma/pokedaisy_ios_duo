@@ -31,7 +31,9 @@ struct PokeDaisyApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active: emulator.resume()
-            case .inactive: emulator.pause()
+            // Inactive is Control Center, a notification pulled down, Siri: the game keeps running (and sounding) there,
+            // so music started from Control Center doesn't stop it. Only leaving the app (background) pauses it.
+            case .inactive: break
             case .background:
                 emulator.pause()
                 emulator.flushSave()

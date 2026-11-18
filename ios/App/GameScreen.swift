@@ -62,6 +62,9 @@ struct GameScreen: View {
             .onChange(of: wide) { _, now in emulator.setLandscape(now) }
         }
         .background(Color.black.ignoresSafeArea())
+        .sheet(isPresented: $emulator.showsBindings) {
+            ControllerBindingsView(controllers: emulator.controllers, pollsItself: false)
+        }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
     }
@@ -86,6 +89,7 @@ struct GameScreen: View {
                 if !touch {
                     HStack(spacing: 10) {
                         Spacer()
+                        BindingsButton()
                         CompanionButton()
                         ControlsToggle(shown: false)
                     }
@@ -168,8 +172,9 @@ struct GameScreen: View {
             }
             .frame(maxHeight: .infinity)
             if !touch {
-                HStack {
+                HStack(spacing: 10) {
                     Spacer()
+                    BindingsButton()
                     ControlsToggle(shown: false)
                 }
                 .padding(.horizontal, 12)
@@ -291,6 +296,26 @@ struct ControlsToggle: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(shown ? "Hide the on-screen buttons" : "Show the on-screen buttons")
+    }
+}
+
+/// Opens CONTROLLER BUTTONS (custom binds) over the game.
+struct BindingsButton: View {
+    @EnvironmentObject var emulator: Emulator
+
+    var body: some View {
+        Button {
+            emulator.showsBindings = true
+        } label: {
+            Label("Buttons", systemImage: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color(white: 0.18)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Change the controller's buttons")
     }
 }
 
