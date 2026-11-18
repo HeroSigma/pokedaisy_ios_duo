@@ -93,6 +93,24 @@ int main(int argc, char** argv) {
     if (!bottoms || bottomColours < 2) printf("FAIL: the companion's pane stayed blank\n"), failures++;
     if (sound < 600 * 600) printf("FAIL: too little sound (%d frames)\n", sound), failures++;
 
+    // Sideways: the game alone with its own ASPECT (EXPAND), kept apart from the two-pane one.
+    pd_ios_set_landscape(true);
+    for (int i = 0; i < 30; i++) pd_ios_tick(16);
+    pd_ios_flush_save();
+    {
+        char line[64] = "";
+        snprintf(path, sizeof(path), "%s/landscape-aspect", data);
+        FILE* f = fopen(path, "r");
+        if (!f || !fgets(line, sizeof(line), f) || atoi(line) != 1) printf("FAIL: landscape's aspect not kept (%s)\n", line), failures++;
+        if (f) fclose(f);
+        snprintf(path, sizeof(path), "%s/settings.ini", data);
+        f = fopen(path, "r");
+        bool portraitKept = false;
+        while (f && fgets(line, sizeof(line), f)) if (!strcmp(line, "aspect=0\n")) portraitKept = true;
+        if (f) fclose(f);
+        if (!portraitKept) printf("FAIL: landscape's aspect leaked into settings.ini\n"), failures++;
+    }
+    pd_ios_set_landscape(false);
     pd_ios_flush_save();
     pd_ios_stop();
     struct stat st;

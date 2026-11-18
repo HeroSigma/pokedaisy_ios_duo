@@ -9,7 +9,9 @@ import SwiftUI
 ///  - STACKED, controls beside: the same column with the D-pad left and the buttons right (a squarer window: the Duo
 ///    open, either way round).
 ///  - SIDE BY SIDE: the game left, the companion right, the buttons at the ends (a wide window: a phone on its side).
-/// The one giving the game the most room wins. With the touch buttons hidden (a controller connected, or the player's pick),
+/// The one giving the game the most room wins. Held sideways (wider than tall) it's PokeDaisy's one-screen look instead: the
+/// game alone with EXPAND (the overworld past the GBA's edges) and the HUD, the companion over it from its button or the
+/// controller's X. With the touch buttons hidden (a controller connected, or the player's pick),
 /// a thin bar along the bottom keeps the button that brings them back.
 struct GameScreen: View {
     @EnvironmentObject var emulator: Emulator
@@ -52,54 +54,129 @@ struct GameScreen: View {
 
     var body: some View {
         GeometryReader { geo in
-            let touch = emulator.showsTouchControls
-            let l = GameScreen.layout(for: geo.size, touch: touch)
+            let wide = geo.size.width > geo.size.height
+            Group {
+                if wide { landscape(size: geo.size) } else { twoPanes(size: geo.size) }
+            }
+            .onAppear { emulator.setLandscape(wide) }
+            .onChange(of: wide) { _, now in emulator.setLandscape(now) }
+        }
+        .background(Color.black.ignoresSafeArea())
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+    }
+
+    // MARK: sideways: the game alone
+
+    private func landscape(size: CGSize) -> some View {
+        let touch = emulator.showsTouchControls
+        let column = touch ? min(max(size.width * 0.15, 130), 190) : 0
+        let roomW = size.width - 2 * column, roomH = size.height - (touch ? 0 : GameScreen.bar)
+        let gameW = max(0, min(roomW, roomH * GameScreen.gameAspect))
+        return ZStack {
             VStack(spacing: 0) {
-                Group {
-                    switch l.arrangement {
-                    case .stackedUnder:
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 0)
-                            panes(stackedWidth: l.paneWidth)
-                            Spacer(minLength: 0)
-                            if touch { strip(width: geo.size.width, height: l.strip) }
-                        }
-                    case .stackedBeside:
-                        HStack(spacing: 0) {
-                            leftColumn(width: l.column, height: geo.size.height)
-                            Spacer(minLength: 0)
-                            panes(stackedWidth: l.paneWidth)
-                            Spacer(minLength: 0)
-                            rightColumn(width: l.column, height: geo.size.height)
-                        }
-                    case .sideBySide:
-                        HStack(spacing: 0) {
-                            if touch { leftColumn(width: l.column, height: geo.size.height) }
-                            Spacer(minLength: 0)
-                            HStack(spacing: 0) {
-                                gamePane.frame(width: l.paneWidth * GameScreen.gameAspect, height: l.paneWidth)
-                                companionPane.frame(width: l.paneWidth * GameScreen.companionAspect, height: l.paneWidth)
-                            }
-                            Spacer(minLength: 0)
-                            if touch { rightColumn(width: l.column, height: geo.size.height) }
-                        }
-                    }
+                HStack(spacing: 0) {
+                    if touch { leftColumn(width: column, height: size.height, companionButton: true) }
+                    Spacer(minLength: 0)
+                    gamePane.frame(width: gameW, height: gameW / GameScreen.gameAspect)
+                    Spacer(minLength: 0)
+                    if touch { rightColumn(width: column, height: size.height) }
                 }
                 .frame(maxHeight: .infinity)
                 if !touch {
-                    HStack {
+                    HStack(spacing: 10) {
                         Spacer()
+                        CompanionButton()
                         ControlsToggle(shown: false)
                     }
                     .padding(.horizontal, 12)
                     .frame(height: GameScreen.bar)
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
+            if emulator.showsCompanionOverlay { companionWindow(size: size) }
         }
-        .background(Color.black.ignoresSafeArea())
-        .statusBarHidden(true)
-        .persistentSystemOverlays(.hidden)
+        .frame(width: size.width, height: size.height)
+    }
+
+    /// The companion over the dimmed game (which keeps running), as the one-screen Android build's window: 4:3, most of the
+    /// height, an X at its corner; a tap on the dim closes it too.
+    private func companionWindow(size: CGSize) -> some View {
+        let h = min(size.height * 0.88, size.width * 0.9 / GameScreen.companionAspect)
+        let w = h * GameScreen.companionAspect
+        return ZStack {
+            Color.black.opacity(0.55)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { emulator.closeCompanion() }
+            companionPane
+                .frame(width: w, height: h)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.85), lineWidth: 2))
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        emulator.closeCompanion()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color(white: 0.2)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.8), lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 14, y: -14)
+                    .accessibilityLabel("Close the companion")
+                }
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: upright: game and companion
+
+    private func twoPanes(size: CGSize) -> some View {
+        let touch = emulator.showsTouchControls
+        let l = GameScreen.layout(for: size, touch: touch)
+        return VStack(spacing: 0) {
+            Group {
+                switch l.arrangement {
+                case .stackedUnder:
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        panes(stackedWidth: l.paneWidth)
+                        Spacer(minLength: 0)
+                        if touch { strip(width: size.width, height: l.strip) }
+                    }
+                case .stackedBeside:
+                    HStack(spacing: 0) {
+                        leftColumn(width: l.column, height: size.height)
+                        Spacer(minLength: 0)
+                        panes(stackedWidth: l.paneWidth)
+                        Spacer(minLength: 0)
+                        rightColumn(width: l.column, height: size.height)
+                    }
+                case .sideBySide:
+                    HStack(spacing: 0) {
+                        if touch { leftColumn(width: l.column, height: size.height) }
+                        Spacer(minLength: 0)
+                        HStack(spacing: 0) {
+                            gamePane.frame(width: l.paneWidth * GameScreen.gameAspect, height: l.paneWidth)
+                            companionPane.frame(width: l.paneWidth * GameScreen.companionAspect, height: l.paneWidth)
+                        }
+                        Spacer(minLength: 0)
+                        if touch { rightColumn(width: l.column, height: size.height) }
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity)
+            if !touch {
+                HStack {
+                    Spacer()
+                    ControlsToggle(shown: false)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: GameScreen.bar)
+            }
+            }
+        .frame(width: size.width, height: size.height)
     }
 
     // MARK: the panes
@@ -160,10 +237,11 @@ struct GameScreen: View {
         .frame(width: width, height: height)
     }
 
-    private func leftColumn(width: CGFloat, height: CGFloat) -> some View {
+    private func leftColumn(width: CGFloat, height: CGFloat, companionButton: Bool = false) -> some View {
         VStack(spacing: 16) {
             Shoulder(label: "L", bit: PD_IOS_L, width: width * 0.62)
             ControlsToggle(shown: true)
+            if companionButton { CompanionButton() }
             Spacer()
             DPad(size: width * 0.88)
             Spacer()
@@ -213,5 +291,25 @@ struct ControlsToggle: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(shown ? "Hide the on-screen buttons" : "Show the on-screen buttons")
+    }
+}
+
+/// Sideways: brings the companion up over the game (the controller's X does too, and gives it the buttons).
+struct CompanionButton: View {
+    @EnvironmentObject var emulator: Emulator
+
+    var body: some View {
+        Button {
+            emulator.openCompanion()
+        } label: {
+            Label("Companion", systemImage: "rectangle.on.rectangle")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color(white: 0.18)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the companion")
     }
 }

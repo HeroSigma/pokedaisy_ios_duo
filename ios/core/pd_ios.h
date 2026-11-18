@@ -69,6 +69,14 @@ void pd_ios_set_battery(int percent, bool charging);
 // The display's refresh this is ticked at, for the sound's rate (60 by default).
 void pd_ios_set_refresh(double hz);
 
+// One screen held sideways: the app shows the game alone (the companion over it on demand), so it takes its own ASPECT,
+// EXPAND by default: the overworld past the GBA's edges, as PokeDaisy on a one-screen device. Its own pick is kept.
+void pd_ios_set_landscape(bool on);
+// The companion has the controller's buttons (X gave them to it; X / START / B at its top give them back).
+bool pd_ios_companion_focused(void);
+// Gives the controller's buttons to the companion (when it can take them) or back to the game.
+void pd_ios_set_companion_focus(bool on);
+
 // One loop: a game frame (more in fast-forward), the companion's taps, its redraw. [ms] since the last tick.
 int pd_ios_tick(unsigned ms);
 

@@ -13,6 +13,28 @@ final class Emulator: ObservableObject {
     @Published var showError = false
     @Published var errorText = ""
     @Published private(set) var controllerConnected = false
+    /// The controller's buttons are the companion's (X gave them to it, as on the 3DS).
+    @Published private(set) var companionFocused = false
+    /// Sideways, the companion over the game: opened by its button or the controller's X, closed by either again.
+    @Published var companionOpen = false
+    var showsCompanionOverlay: Bool { companionOpen || companionFocused }
+
+    /// One screen held sideways: the game alone, with its own ASPECT (EXPAND unless changed there).
+    func setLandscape(_ on: Bool) {
+        pd_ios_set_landscape(on)
+        if !on { closeCompanion() }
+    }
+
+    func openCompanion() {
+        companionOpen = true
+        pd_ios_set_companion_focus(true) // a controller drives it too, where it can
+    }
+
+    func closeCompanion() {
+        companionOpen = false
+        pd_ios_set_companion_focus(false)
+        pd_ios_touch(0, 0, false)
+    }
 
     /// The on-screen buttons: AUTO = shown unless a game controller is connected; SHOWN / HIDDEN = the player's pick from the
     /// buttons' toggle, kept until a controller connects or disconnects (then AUTO again).
@@ -116,6 +138,8 @@ final class Emulator: ObservableObject {
         batteryTimer?.invalidate()
         batteryTimer = nil
         running = false
+        companionOpen = false
+        companionFocused = false
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
@@ -179,6 +203,11 @@ final class Emulator: ObservableObject {
         let result = pd_ios_tick(UInt32((dt * 1000).rounded()))
         if result & Int32(PD_IOS_TOP_CHANGED) != 0 { top.upload(pd_ios_top()) }
         if result & Int32(PD_IOS_BOTTOM_CHANGED) != 0 { bottom.upload(pd_ios_bottom()) }
+        let focused = pd_ios_companion_focused()
+        if focused != companionFocused {
+            companionFocused = focused
+            if !focused { companionOpen = false } // X / B handed the buttons back: the window goes with them
+        }
         if result & Int32(PD_IOS_LEAVE) != 0 { stop() }
     }
 

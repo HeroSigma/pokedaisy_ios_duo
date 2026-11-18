@@ -226,9 +226,46 @@ static void backup_for_load(void* ctx) {
     backup_save();
 }
 
+// One screen held sideways (pd_ios_set_landscape): the game alone, its own ASPECT (EXPAND unless the player picks another
+// there), kept apart from the two-pane one in `landscape-aspect` so neither overwrites the other in settings.ini.
+static bool landscape;
+static int otherAspect = PD_ASPECT_EXPAND; // the aspect of the orientation not in use
+static char landscapePath[600];
+
+static void save_settings(void) {
+    struct pd_settings out = settings;
+    if (landscape) out.aspect = otherAspect;
+    pd_settings_save(&out, settingsPath);
+    FILE* f = fopen(landscapePath, "w");
+    if (f) {
+        fprintf(f, "%d\n", landscape ? settings.aspect : otherAspect);
+        fclose(f);
+    }
+}
+
+void pd_ios_set_landscape(bool on) {
+    if (on == landscape || !settingsReady) return;
+    int now = settings.aspect;
+    settings.aspect = otherAspect;
+    otherAspect = now;
+    landscape = on;
+    session.redraw = true;
+}
+
+bool pd_ios_companion_focused(void) {
+    return running && session.ui.keyFocus;
+}
+
+void pd_ios_set_companion_focus(bool on) {
+    if (!running || on == session.ui.keyFocus || (on && !pd_session_can_focus(&session))) return;
+    pd_session_set_focus(&session, on);
+    withheld |= buttonsHeld; // what's held now stays away from the side it left
+    session.redraw = true;
+}
+
 static void settings_changed(void* ctx) {
     (void) ctx;
-    pd_settings_save(&settings, settingsPath);
+    save_settings();
 }
 
 static void cheat_path(void* ctx, uint32_t crc, char* path, size_t len) {
@@ -274,6 +311,13 @@ void pd_ios_init(const char* data, const char* cache) {
     snprintf(settingsPath, sizeof(settingsPath), "%s/settings.ini", dataDir);
     pd_settings_defaults(&settings);
     pd_settings_load(&settings, settingsPath);
+    snprintf(landscapePath, sizeof(landscapePath), "%s/landscape-aspect", dataDir);
+    FILE* f = fopen(landscapePath, "r");
+    int a;
+    if (f) {
+        if (fscanf(f, "%d", &a) == 1 && a >= 0 && a < PD_ASPECTS) otherAspect = a;
+        fclose(f);
+    }
     settingsReady = true;
     mLogSetDefaultLogger(&silentLogger);
 }
@@ -431,7 +475,7 @@ bool pd_ios_game_boy(void) {
 void pd_ios_flush_save(void) {
     if (!running) return;
     if (saveFile) saveFile->sync(saveFile, NULL, 0);
-    pd_settings_save(&settings, settingsPath);
+    save_settings();
 }
 
 // ---- input ----
@@ -640,7 +684,7 @@ int pd_ios_tick(unsigned ms) {
             pk_heal_rtc(core);
             break;
         case PD_ACTION_SETTINGS_CHANGED:
-            pd_settings_save(&settings, settingsPath);
+            save_settings();
             break;
         default:
             break;

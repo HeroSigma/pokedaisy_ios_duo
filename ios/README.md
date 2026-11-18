@@ -27,8 +27,11 @@ it folds and turns:
 
 - **Stacked, buttons under**: the game over the companion, the touch buttons below (folded, upright).
 - **Stacked, buttons beside**: the same column, with the D-pad on the left and the buttons on the right (the Duo open,
-  either way round).
-- **Side by side**: the game on the left, the companion on the right, the buttons at the ends (a phone on its side).
+  upright).
+- **Sideways**: held wider than tall, it's PokeDaisy's one-screen look. The game fills the screen with **EXPAND** (the
+  overworld drawn past the GBA's edges) and the HUD. **Companion** (or the controller's X) opens the companion over the
+  game, and X, B, the close button or a tap outside it closes it. Sideways keeps its own VIEW setting, so changing it
+  there doesn't change the upright one.
 
 The touch buttons go away while a game controller is connected; **Show buttons** at the bottom brings them back (and
 **Hide buttons** among them puts them away again). Connecting or disconnecting a controller goes back to that automatic
