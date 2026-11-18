@@ -5,7 +5,7 @@ on:
   pull_request:
     paths: ['ios/**', '3ds/core/**', '3ds/host/**', '3ds/emu/pd_dispatch.c', '3ds/emu/pd_armgba.h', '3ds/emu/pd_gpsp.h', 'app/src/main/cpp/**', 'linux/*.c', 'linux/*.h', 'third_party/mgba', 'gamedata/**', '.github/workflows/ios.yml']
   push:
-    branches: [main, dev]
+    branches: [main, dev, ios-duo]
     paths: ['ios/**', '3ds/core/**', '3ds/host/**', '3ds/emu/pd_dispatch.c', '3ds/emu/pd_armgba.h', '3ds/emu/pd_gpsp.h', 'app/src/main/cpp/**', 'linux/*.c', 'linux/*.h', 'third_party/mgba', 'gamedata/**', '.github/workflows/ios.yml']
   workflow_dispatch:
 permissions:
