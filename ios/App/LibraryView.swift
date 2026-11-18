@@ -3,7 +3,6 @@ import SwiftUI
 struct LibraryView: View {
     @EnvironmentObject var library: Library
     @EnvironmentObject var emulator: Emulator
-    @State private var importing = false
 
     var body: some View {
         NavigationStack {
@@ -28,14 +27,11 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        importing = true
+                        addGames()
                     } label: {
                         Label("Add games", systemImage: "plus")
                     }
                 }
-            }
-            .fileImporter(isPresented: $importing, allowedContentTypes: Library.importTypes, allowsMultipleSelection: true) { result in
-                if case .success(let urls) = result { library.importFiles(urls) }
             }
             .alert("Games", isPresented: Binding(get: { library.importMessage != nil }, set: { if !$0 { library.importMessage = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -43,6 +39,12 @@ struct LibraryView: View {
                 Text(library.importMessage ?? "")
             }
             .onAppear { library.refresh() }
+        }
+    }
+
+    private func addGames() {
+        FilePicker.pick(types: Library.importTypes) { urls in
+            if !urls.isEmpty { library.importFiles(urls) }
         }
     }
 
@@ -76,7 +78,7 @@ struct LibraryView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)
-            Button("Add games") { importing = true }
+            Button("Add games") { addGames() }
                 .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

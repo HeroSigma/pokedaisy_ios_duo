@@ -60,6 +60,7 @@ final class Library: ObservableObject {
                 skipped.append(url.lastPathComponent)
                 continue
             }
+            // The picker hands over copies (FilePicker's asCopy); one from Files' own folders may still be scoped.
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             let target = romsURL.appendingPathComponent(url.lastPathComponent)
@@ -82,8 +83,9 @@ final class Library: ObservableObject {
     }
 
     static var importTypes: [UTType] {
-        var types: [UTType] = ["gba", "gb", "gbc", "sav"].compactMap { UTType(filenameExtension: $0) }
-        types.append(.data)
-        return types
+        // Declared in Info.plist (UTImportedTypeDeclarations): an undeclared extension is only a dynamic type, which the
+        // picker doesn't always take. Anything else (a ROM in a zip's folder, odd names) can still be picked as data.
+        let ours = ["gba", "gb", "gbc", "sav"].map { UTType(importedAs: "com.pokedaisy.ios.\($0)", conformingTo: .data) }
+        return ours + [.data]
     }
 }
