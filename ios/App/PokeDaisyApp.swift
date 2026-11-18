@@ -1,7 +1,17 @@
 import SwiftUI
+import UIKit
+
+/// Every orientation, on both displays. The inner display of iPhone Duo resizes the app to whatever window it gives, so the
+/// app must not ask to be full screen (UIRequiresFullScreen kept it sideways there) or limit its orientations.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        .all
+    }
+}
 
 @main
 struct PokeDaisyApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var library = Library()
     @StateObject private var emulator = Emulator()
     @Environment(\.scenePhase) private var scenePhase

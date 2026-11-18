@@ -14,6 +14,24 @@ final class Emulator: ObservableObject {
     @Published var errorText = ""
     @Published private(set) var controllerConnected = false
 
+    /// The on-screen buttons: AUTO = shown unless a game controller is connected; SHOWN / HIDDEN = the player's pick from the
+    /// buttons' toggle, kept until a controller connects or disconnects (then AUTO again).
+    enum TouchControls: String { case auto, shown, hidden }
+    @Published var touchControls: TouchControls = .auto {
+        didSet { UserDefaults.standard.set(touchControls.rawValue, forKey: "touchControls") }
+    }
+    var showsTouchControls: Bool {
+        switch touchControls {
+        case .auto: return !controllerConnected
+        case .shown: return true
+        case .hidden: return false
+        }
+    }
+    func toggleTouchControls() {
+        touchControls = showsTouchControls ? .hidden : .shown
+        if !showsTouchControls { touchButtons = 0 } // nothing stays held under buttons that went away
+    }
+
     let top = PixelRenderer(width: Int(PD_IOS_TOP_W), height: Int(PD_IOS_TOP_H), format: .rgba8Unorm)
     let bottom = PixelRenderer(width: Int(PD_IOS_BOTTOM_W), height: Int(PD_IOS_BOTTOM_H), format: .bgra8Unorm)
 
@@ -31,10 +49,15 @@ final class Emulator: ObservableObject {
 
     init() {
         controllers.onChange = { [weak self] connected in
-            Task { @MainActor in self?.controllerConnected = connected }
+            Task { @MainActor in
+                guard let self, self.controllerConnected != connected else { return }
+                self.controllerConnected = connected
+                self.touchControls = .auto
+            }
         }
         controllers.start()
         controllerConnected = controllers.connected
+        touchControls = TouchControls(rawValue: UserDefaults.standard.string(forKey: "touchControls") ?? "") ?? .auto
     }
 
     func start(_ game: Game) {

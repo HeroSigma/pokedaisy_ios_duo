@@ -30,8 +30,12 @@ it folds and turns:
   either way round).
 - **Side by side**: the game on the left, the companion on the right, the buttons at the ends (a phone on its side).
 
-The touch buttons go away while a game controller is connected. Both pictures use sharp bilinear scaling, so pixels
-stay even at any size.
+The touch buttons go away while a game controller is connected; **Show buttons** at the bottom brings them back (and
+**Hide buttons** among them puts them away again). Connecting or disconnecting a controller goes back to that automatic
+choice. Both pictures use sharp bilinear scaling, so pixels stay even at any size.
+
+The app resizes like an iPad app: it doesn't ask to be full screen, so on the iPhone Duo's inner display it fills the
+window iOS gives it, held upright or sideways, and turns with the device on the outer one.
 
 ## Controls
 

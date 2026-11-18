@@ -9,7 +9,8 @@ import SwiftUI
 ///  - STACKED, controls beside: the same column with the D-pad left and the buttons right (a squarer window: the Duo
 ///    open, either way round).
 ///  - SIDE BY SIDE: the game left, the companion right, the buttons at the ends (a wide window: a phone on its side).
-/// The one giving the game the most room wins.
+/// The one giving the game the most room wins. With the touch buttons hidden (a controller connected, or the player's pick),
+/// a thin bar along the bottom keeps the button that brings them back.
 struct GameScreen: View {
     @EnvironmentObject var emulator: Emulator
 
@@ -17,6 +18,8 @@ struct GameScreen: View {
     private static let companionAspect = CGFloat(PD_IOS_BOTTOM_W) / CGFloat(PD_IOS_BOTTOM_H) // 4:3
 
     enum Arrangement { case stackedUnder, stackedBeside, sideBySide }
+
+    static let bar: CGFloat = 36
 
     struct Layout {
         var arrangement: Arrangement
@@ -35,8 +38,11 @@ struct GameScreen: View {
         let sideH = max(0, min(H, (W - 2 * column) / (gameAspect + companionAspect)))
         let sideGame = sideH * gameAspect
         if !touch {
-            return under >= sideGame ? Layout(arrangement: .stackedUnder, paneWidth: under, strip: 0, column: 0)
-                                     : Layout(arrangement: .sideBySide, paneWidth: sideH, strip: 0, column: 0)
+            let barUnder = max(0, min(W, (H - bar) / stackH))
+            let barSideH = max(0, min(H - bar, W / (gameAspect + companionAspect)))
+            return barUnder >= barSideH * gameAspect
+                ? Layout(arrangement: .stackedUnder, paneWidth: barUnder, strip: 0, column: 0)
+                : Layout(arrangement: .sideBySide, paneWidth: barSideH, strip: 0, column: 0)
         }
         let best = max(under, beside, sideGame)
         if best == under { return Layout(arrangement: .stackedUnder, paneWidth: under, strip: strip, column: column) }
@@ -46,36 +52,47 @@ struct GameScreen: View {
 
     var body: some View {
         GeometryReader { geo in
-            let touch = !emulator.controllerConnected
+            let touch = emulator.showsTouchControls
             let l = GameScreen.layout(for: geo.size, touch: touch)
-            Group {
-                switch l.arrangement {
-                case .stackedUnder:
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        panes(stackedWidth: l.paneWidth)
-                        Spacer(minLength: 0)
-                        if touch { strip(width: geo.size.width, height: l.strip) }
-                    }
-                case .stackedBeside:
-                    HStack(spacing: 0) {
-                        if touch { leftColumn(width: l.column, height: geo.size.height) }
-                        Spacer(minLength: 0)
-                        panes(stackedWidth: l.paneWidth)
-                        Spacer(minLength: 0)
-                        if touch { rightColumn(width: l.column, height: geo.size.height) }
-                    }
-                case .sideBySide:
-                    HStack(spacing: 0) {
-                        if touch { leftColumn(width: l.column, height: geo.size.height) }
-                        Spacer(minLength: 0)
-                        HStack(spacing: 0) {
-                            gamePane.frame(width: l.paneWidth * GameScreen.gameAspect, height: l.paneWidth)
-                            companionPane.frame(width: l.paneWidth * GameScreen.companionAspect, height: l.paneWidth)
+            VStack(spacing: 0) {
+                Group {
+                    switch l.arrangement {
+                    case .stackedUnder:
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            panes(stackedWidth: l.paneWidth)
+                            Spacer(minLength: 0)
+                            if touch { strip(width: geo.size.width, height: l.strip) }
                         }
-                        Spacer(minLength: 0)
-                        if touch { rightColumn(width: l.column, height: geo.size.height) }
+                    case .stackedBeside:
+                        HStack(spacing: 0) {
+                            leftColumn(width: l.column, height: geo.size.height)
+                            Spacer(minLength: 0)
+                            panes(stackedWidth: l.paneWidth)
+                            Spacer(minLength: 0)
+                            rightColumn(width: l.column, height: geo.size.height)
+                        }
+                    case .sideBySide:
+                        HStack(spacing: 0) {
+                            if touch { leftColumn(width: l.column, height: geo.size.height) }
+                            Spacer(minLength: 0)
+                            HStack(spacing: 0) {
+                                gamePane.frame(width: l.paneWidth * GameScreen.gameAspect, height: l.paneWidth)
+                                companionPane.frame(width: l.paneWidth * GameScreen.companionAspect, height: l.paneWidth)
+                            }
+                            Spacer(minLength: 0)
+                            if touch { rightColumn(width: l.column, height: geo.size.height) }
+                        }
                     }
+                }
+                .frame(maxHeight: .infinity)
+                if !touch {
+                    HStack {
+                        Spacer()
+                        ControlsToggle(shown: false)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: GameScreen.bar)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -125,6 +142,8 @@ struct GameScreen: View {
             HStack {
                 Shoulder(label: "L", bit: PD_IOS_L, width: min(90, width * 0.2))
                 Spacer()
+                ControlsToggle(shown: true)
+                Spacer()
                 Shoulder(label: "R", bit: PD_IOS_R, width: min(90, width * 0.2))
             }
             .padding(.horizontal, 12)
@@ -144,6 +163,7 @@ struct GameScreen: View {
     private func leftColumn(width: CGFloat, height: CGFloat) -> some View {
         VStack(spacing: 16) {
             Shoulder(label: "L", bit: PD_IOS_L, width: width * 0.62)
+            ControlsToggle(shown: true)
             Spacer()
             DPad(size: width * 0.88)
             Spacer()
@@ -171,5 +191,27 @@ struct GameScreen: View {
         }
         .padding(.vertical, 16)
         .frame(width: width, height: height)
+    }
+}
+
+/// Shows or hides the on-screen buttons (Emulator.touchControls). With a controller connected they start hidden; this
+/// brings them up when they're needed, and back down.
+struct ControlsToggle: View {
+    @EnvironmentObject var emulator: Emulator
+    let shown: Bool
+
+    var body: some View {
+        Button {
+            emulator.toggleTouchControls()
+        } label: {
+            Label(shown ? "Hide buttons" : "Show buttons", systemImage: shown ? "gamecontroller.fill" : "gamecontroller")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.8))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color(white: 0.18)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(shown ? "Hide the on-screen buttons" : "Show the on-screen buttons")
     }
 }
