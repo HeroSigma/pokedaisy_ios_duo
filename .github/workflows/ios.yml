@@ -33,9 +33,10 @@ jobs:
           done
 
   ipa:
-    # GitHub's macOS arm64 runners can be scarce: a job no runner takes is cancelled after a while. Re-run it then.
+    # Intel Macs: GitHub's arm64 ones had no capacity (jobs cancelled unstarted, 2026-11-18). The app is cross-built for
+    # arm64 iPhones either way; macos-15 again once arm64 runners are free.
     needs: smoke
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
