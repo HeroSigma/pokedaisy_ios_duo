@@ -33,18 +33,27 @@ jobs:
           done
 
   ipa:
-    # Intel Macs: GitHub's arm64 ones had no capacity (jobs cancelled unstarted, 2026-11-18). The app is cross-built for
-    # arm64 iPhones either way; macos-15 again once arm64 runners are free.
+    # GitHub's xcode-27 image (a preview: macOS 27, Xcode 27 with the iOS 27.1 SDK and the iPhone Duo simulator), the runner the
+    # owner's bcd-games fork builds on: macos-15 / macos-15-intel jobs were never picked up for this fork (2026-11-18).
+    # iPhone Duo lays an app out by the SDK its executable records (LC_BUILD_VERSION): built with an SDK older than iOS 27.1 it
+    # runs centred on the inner display with empty space around it (Apple, "Prepare your app for iPhone Duo").
     needs: smoke
-    runs-on: macos-15-intel
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - run: git submodule update --init --depth 1 third_party/mgba
-      - name: Tools
+      - name: Select the newest stable Xcode
         run: |
+          # Links (Xcode_27.2.app -> Xcode_27.2_Release_Candidate.app) resolved first; a beta / RC only if nothing else is there.
+          REAL=$(for x in /Applications/Xcode*.app; do readlink -f "$x"; done 2>/dev/null | sort -u)
+          NEWEST=$(printf '%s\n' "$REAL" | grep -viE 'beta|release_candidate|_rc\b|-rc\b' | sort -V | tail -1)
+          [ -n "$NEWEST" ] || NEWEST=$(printf '%s\n' "$REAL" | sort -V | tail -1)
+          if [ -n "$NEWEST" ]; then sudo xcode-select -s "$NEWEST/Contents/Developer"; echo "::notice::selected $NEWEST"; fi
           xcodebuild -version
-          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          echo "::notice::iOS SDK $(xcrun --sdk iphoneos --show-sdk-version)"
+      - name: Tools
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
       - name: The C side for arm64 iPhones
         run: sh ios/build_core.sh
       - name: The app (unsigned)
@@ -54,9 +63,24 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | head -60; tail -40 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+            build > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -60 | sed 's/^/::error::/'; tail -40 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           grep -E "warning: .*/ios/App/" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -40 || true
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
+      - name: iPhone Duo's whole inner display (iOS 27.1 SDK)
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/PokeDaisy.app"
+          v=$(xcrun --sdk iphoneos --show-sdk-version)
+          if [ "$(printf '%s\n' 27.1 "$v" | sort -V | head -1)" = "27.1" ]; then
+            echo "::notice::iOS SDK $v: built for the whole inner display, no stamp needed"; exit 0
+          fi
+          # The bcd-games way: the executable stamped as built with the 27.1 SDK (minimum iOS kept), and the Info.plist with it.
+          minos=$(xcrun vtool -show-build "$APP/PokeDaisy" | awk '$1 == "minos" {print $2; exit}')
+          xcrun vtool -set-build-version ios "$minos" 27.1 -replace -output "$APP/PokeDaisy.stamped" "$APP/PokeDaisy"
+          mv -f "$APP/PokeDaisy.stamped" "$APP/PokeDaisy"
+          chmod 755 "$APP/PokeDaisy"
+          /usr/libexec/PlistBuddy -c "Set :DTSDKName iphoneos27.1" -c "Set :DTPlatformVersion 27.1" "$APP/Info.plist"
+          echo "::warning::iOS SDK $v is older than 27.1: stamped as built with 27.1 so iPhone Duo uses the whole inner display"
       - name: Package the .ipa
         run: |
           app="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/PokeDaisy.app"

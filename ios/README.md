@@ -80,7 +80,10 @@ With a free Apple ID the app has to be refreshed every 7 days (AltStore / SideSt
 
 ## Building it
 
-Needs a Mac with Xcode 16+, CMake and XcodeGen (`brew install cmake xcodegen`):
+Needs a Mac with CMake and XcodeGen (`brew install cmake xcodegen`) and **Xcode 27 with the iOS 27.1 SDK** for the iPhone Duo:
+built with an older SDK, the app runs centred on the Duo's inner display with empty space around it (Apple, "Prepare your app
+for iPhone Duo"). It still builds with Xcode 16+ for other iPhones. CI uses GitHub's `xcode-27` image and, if its SDK is older
+than 27.1, stamps the app as built with 27.1 (`vtool`), as BCD's build does.
 
 ```sh
 git submodule update --init third_party/mgba
