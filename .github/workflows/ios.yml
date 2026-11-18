@@ -63,6 +63,7 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="0.1.${{ github.run_number }}" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -60 | sed 's/^/::error::/'; tail -40 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
           grep -E "warning: .*/ios/App/" "$RUNNER_TEMP/xcodebuild.log" | sort -u | head -40 || true
           tail -3 "$RUNNER_TEMP/xcodebuild.log"
@@ -100,3 +101,62 @@ jobs:
           name: xcodebuild-log
           path: ${{ runner.temp }}/xcodebuild.log
           if-no-files-found: ignore
+
+  # Every build of ios-duo goes to SideStore: a pre-release ios-v0.1.<run> with the .ipa (a pre-release, so the website's
+  # release trigger and Android's updater never see it), then source.json from those releases on the `sidestore` branch,
+  # read through https://raw.githubusercontent.com/<repo>/sidestore/source.json (ios/tools/sidestore_source.py).
+  publish:
+    needs: ipa
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ios-duo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      TAG: ios-v0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          sparse-checkout: ios/tools
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: PokeDaisy-iOS
+          path: ${{ runner.temp }}/ipa
+      - name: Check the app carries this build's version
+        run: |
+          python3 -I - "$RUNNER_TEMP/ipa/PokeDaisy-iOS.ipa" "0.1.${{ github.run_number }}" "${{ github.run_number }}" <<'PY'
+          import plistlib, re, sys, zipfile
+          ipa, version, build = sys.argv[1:]
+          with zipfile.ZipFile(ipa) as z:
+              name = [n for n in z.namelist() if re.fullmatch(r"Payload/[^/]+\.app/Info\.plist", n)][0]
+              info = plistlib.loads(z.read(name))
+          got = (info["CFBundleShortVersionString"], info["CFBundleVersion"], info["CFBundleIdentifier"])
+          print("app:", got)
+          if got != (version, build, "com.pokedaisy.ios"):
+              sys.exit(f"the app says {got}, the release would say {(version, build)}: SideStore would offer it forever")
+          PY
+      - name: Release
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "::notice::$TAG is already released (a re-run): the source is rebuilt from what's there"
+          else
+            gh release create "$TAG" "$RUNNER_TEMP/ipa/PokeDaisy-iOS.ipa" --repo "$REPO" --target "$GITHUB_SHA" \
+              --prerelease --title "PokeDaisy for iPhone 0.1.${{ github.run_number }}" \
+              --notes "iPhone build 0.1.${{ github.run_number }} from ios-duo at ${GITHUB_SHA:0:12}: $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s)
+
+          Unsigned: install it with SideStore or AltStore (ios/README.md)."
+          fi
+      - name: The SideStore source
+        run: |
+          gh api "repos/$REPO/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          mkdir -p "$RUNNER_TEMP/site"
+          python3 -I ios/tools/sidestore_source.py --repo "$REPO" --releases "$RUNNER_TEMP/releases.json" --out "$RUNNER_TEMP/site/source.json"
+          cd "$RUNNER_TEMP/site"
+          git init -q -b sidestore
+          git add source.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "SideStore source: PokeDaisy for iPhone 0.1.${{ github.run_number }}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" sidestore
+          echo "::notice::source: https://raw.githubusercontent.com/${REPO}/sidestore/source.json"

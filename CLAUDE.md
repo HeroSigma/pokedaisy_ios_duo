@@ -204,7 +204,7 @@ third host of `3ds/host/pd_session.c`, beside the 3DS (`3ds/ctr/main.c`) and `pd
 buttons, sound ring and the two pictures (the top screen composed like `3ds/ctr/gpu.c` at 2x, the companion's 320x240).
 Every game runs on mGBA's interpreter (no JIT on iOS): `ios/core/pd_ios_nocores.c` stubs armGBA / gpSP for
 `3ds/emu/pd_dispatch.c` - a new function in `pd_armgba.h` / `pd_gpsp.h` needs its line there. `ios/core/test/pd_ios_smoke.c`
-runs the C side headless on the diagnostic ROMs (CI's `iPhone` workflow, then an unsigned `.ipa` on macOS; XcodeGen's
+runs the C side headless on the diagnostic ROMs (CI's `iPhone` workflow, then an unsigned `.ipa` on the `xcode-27` image, each ios-duo build a pre-release `ios-v0.1.<run>` listed by `ios/tools/sidestore_source.py` in `source.json` on the `sidestore` branch; XcodeGen's
 `ios/project.yml`, the `.xcodeproj` isn't committed).
 
 ## Linux port (`linux/`)

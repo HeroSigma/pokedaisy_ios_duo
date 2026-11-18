@@ -65,17 +65,18 @@ Everything is in the Files app under **On My iPhone > PokeDaisy**:
 
 ## Installing it (from Windows)
 
-The CI makes an unsigned `.ipa`. iOS only installs apps signed for your device, so a sideloading tool signs it with
-your own Apple ID:
+iOS only installs apps signed for your device, so a sideloading tool signs PokeDaisy with your own Apple ID:
 
-1. On the repo's **Actions** tab, open the latest **iPhone** run and download the **PokeDaisy-iOS** artifact (a zip
-   with `PokeDaisy-iOS.ipa` inside).
-2. Install **AltStore** (AltServer for Windows, with iTunes and iCloud from Apple's website, not the Microsoft Store)
-   or **SideStore**, following their own guides.
-3. Open the `.ipa` with AltStore / SideStore on the phone. Turn on **Developer Mode** when iOS asks (Settings > Privacy
-   & Security).
+1. Install **SideStore** (or **AltStore**, with AltServer for Windows plus iTunes and iCloud from Apple's website, not the
+   Microsoft Store), following their own guides. Turn on **Developer Mode** when iOS asks (Settings > Privacy & Security).
+2. In SideStore, open **Sources**, tap **+** and add:
 
-With a free Apple ID the app has to be refreshed every 7 days (AltStore / SideStore do it for you), and you can have
+   `https://raw.githubusercontent.com/pgrace34/pokedaisy_ios_duo/sidestore/source.json`
+
+3. Install **PokeDaisy** from that source. Every new build of the `ios-duo` branch shows up there as an update.
+
+Each build is also a pre-release on the repo's Releases page (`ios-v0.1.<build>`, `PokeDaisy-iOS.ipa`) if you'd rather open
+the `.ipa` by hand. With a free Apple ID the app has to be refreshed every 7 days (SideStore does it for you), and you can have
 3 sideloaded apps at a time.
 
 ## Building it
