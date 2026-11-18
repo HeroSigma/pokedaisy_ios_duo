@@ -64,6 +64,7 @@ static uint32_t buttonsHeld, buttonsWas, withheld;
 static int focusHeldFor[4];
 static bool touching;
 static int touchX, touchY;
+static bool ffWas; // fast-forward on at the last tick: a notice when it changes
 static bool touchDown, touchPress; // touchPress: a finger landed since the last tick (kept even if it already lifted)
 
 static double refreshHz = 60.0;
@@ -430,6 +431,7 @@ bool pd_ios_start(const char* romPath, const char* savePath, char* error, size_t
     pd_session_start(&session, core, video, &settings, &files);
 
     buttonsHeld = buttonsWas = withheld = 0;
+    ffWas = false;
     memset(focusHeldFor, 0, sizeof(focusHeldFor));
     touching = touchDown = touchPress = false;
     fpsFrames = fpsMs = 0;
@@ -696,6 +698,14 @@ int pd_ios_tick(unsigned ms) {
                            .ffHeld = (held & PD_IOS_ZR) != 0, .stickAngle = -1 };
     unsigned before = session.frame;
     pd_session_tick(&session, &in, ms);
+    if (session.ff != ffWas) {
+        // However it went on or off (FF held, the QUICK MENU's FF, the companion), a notice on the game says so.
+        ffWas = session.ff;
+        char text[40];
+        if (ffWas) snprintf(text, sizeof(text), "Fast forward on (%dx)", settings.ffSpeed);
+        else snprintf(text, sizeof(text), "Fast forward off");
+        pd_session_show(&session, text);
+    }
     gb_audio_pump();
     audio_follow();
     unsigned frames = session.frame - before;

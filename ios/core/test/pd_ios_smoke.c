@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
         uint32_t keys = (i / 30) % 2 ? PD_IOS_A : 0;
         if (i == 300) keys |= PD_IOS_Y; // the QUICK MENU, then closed again
         if (i == 330) keys |= PD_IOS_B;
+        if (i >= 400 && i < 460) keys |= PD_IOS_ZR; // FF held: its notice
         pd_ios_set_buttons(keys);
         if (i == 200) { // a quick tap on STATES: down and up between two ticks
             pd_ios_touch(260, 226, true);
@@ -61,6 +62,13 @@ int main(int argc, char** argv) {
         if (r & PD_IOS_BOTTOM_CHANGED) bottoms++;
         if (r & PD_IOS_LEAVE) printf("leave asked at %d\n", i);
         sound += pd_ios_audio_read(audio, 800); // the audio thread, about a refresh's worth
+        if (i == 410 || i == 470) {
+            const uint32_t* t = (const uint32_t*) pd_ios_top();
+            for (int k = 0; k < PD_IOS_TOP_W * PD_IOS_TOP_H; k++)
+                px[k] = (t[k] & 0xFF) << 16 | (t[k] & 0xFF00) | (t[k] >> 16 & 0xFF);
+            snprintf(path, sizeof(path), "%s/top-ff-%s.png", out, i == 410 ? "on" : "off");
+            pd_png_write(path, PD_IOS_TOP_W, PD_IOS_TOP_H, px);
+        }
         if (i >= 200 && i <= 205 && (r & PD_IOS_BOTTOM_CHANGED)) tapped = true;
         if (i == 205 || i == 320) {
             const uint32_t* t = (const uint32_t*) (i == 205 ? pd_ios_bottom() : pd_ios_top());
