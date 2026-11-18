@@ -64,7 +64,7 @@ static uint32_t buttonsHeld, buttonsWas, withheld;
 static int focusHeldFor[4];
 static bool touching;
 static int touchX, touchY;
-static bool touchDown, touchChanged;
+static bool touchDown, touchPress; // touchPress: a finger landed since the last tick (kept even if it already lifted)
 
 static double refreshHz = 60.0;
 static unsigned fpsFrames, fpsMs;
@@ -387,7 +387,7 @@ bool pd_ios_start(const char* romPath, const char* savePath, char* error, size_t
 
     buttonsHeld = buttonsWas = withheld = 0;
     memset(focusHeldFor, 0, sizeof(focusHeldFor));
-    touching = touchDown = touchChanged = false;
+    touching = touchDown = touchPress = false;
     fpsFrames = fpsMs = 0;
     session.redraw = true;
     running = true;
@@ -445,10 +445,12 @@ void pd_ios_touch(int x, int y, bool down) {
     if (y < 0) y = 0;
     if (x >= PD_IOS_BOTTOM_W) x = PD_IOS_BOTTOM_W - 1;
     if (y >= PD_IOS_BOTTOM_H) y = PD_IOS_BOTTOM_H - 1;
-    touchX = x;
-    touchY = y;
+    if (down) {
+        touchX = x;
+        touchY = y;
+        if (!touchDown) touchPress = true;
+    }
     touchDown = down;
-    touchChanged = true;
 }
 
 void pd_ios_set_battery(int percent, bool charging) {
@@ -613,17 +615,17 @@ int pd_ios_tick(unsigned ms) {
     buttonsWas = held;
     companion_keys(held, down);
 
-    if (touchChanged) {
-        touchChanged = false;
-        if (touchDown) {
-            session.redraw |= pd_ui_touch(&session.ui, touchX, touchY, true);
-            touching = true;
-        } else if (touching) {
-            session.redraw |= pd_ui_touch(&session.ui, 0, 0, false);
-            touching = false;
-        }
-    } else if (touching) {
+    // A tap can land and lift between two ticks: the press is kept until a tick sees it, then the lift.
+    if (touchPress) {
+        touchPress = false;
+        session.redraw |= pd_ui_touch(&session.ui, touchX, touchY, true);
+        touching = true;
+    } else if (touching && touchDown) {
         session.redraw |= pd_ui_touch(&session.ui, touchX, touchY, true); // held: the companion's drags and long presses
+    }
+    if (touching && !touchDown) {
+        session.redraw |= pd_ui_touch(&session.ui, 0, 0, false);
+        touching = false;
     }
 
     enum pd_action action = pd_ui_take_action(&session.ui);

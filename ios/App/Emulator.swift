@@ -29,14 +29,41 @@ final class Emulator: ObservableObject {
     }
     func toggleTouchControls() {
         touchControls = showsTouchControls ? .hidden : .shown
-        if !showsTouchControls { touchButtons = 0 } // nothing stays held under buttons that went away
+        if !showsTouchControls { // nothing stays held under buttons that went away
+            touchButtons = 0
+            tapHold = [Int](repeating: 0, count: Emulator.buttonCount)
+        }
     }
 
     let top = PixelRenderer(width: Int(PD_IOS_TOP_W), height: Int(PD_IOS_TOP_H), format: .rgba8Unorm)
     let bottom = PixelRenderer(width: Int(PD_IOS_BOTTOM_W), height: Int(PD_IOS_BOTTOM_H), format: .bgra8Unorm)
 
-    /// The on-screen controls' buttons (PD_IOS_* bits), set by TouchControls.
-    var touchButtons: UInt32 = 0
+    /// The on-screen controls' buttons (PD_IOS_* bits), set by TouchControls. A tap can begin and end between two ticks,
+    /// and the game reads its buttons once a frame, so a new press stays held for at least `Emulator.tapFrames` ticks
+    /// (`tapHold`) whatever the finger does: a quick tap registers, holding works as before.
+    var touchButtons: UInt32 = 0 {
+        didSet {
+            let pressed = touchButtons & ~oldValue
+            guard pressed != 0 else { return }
+            for bit in 0..<Emulator.buttonCount where pressed & (1 << UInt32(bit)) != 0 {
+                tapHold[bit] = Emulator.tapFrames
+            }
+        }
+    }
+    private var tapHold = [Int](repeating: 0, count: Emulator.buttonCount)
+    private static let buttonCount = 14
+    /// About 1/15 s: past the 3 frames Game Boy games can need to notice a press outside their menus.
+    private static let tapFrames = 4
+
+    /// What the touch buttons hold this tick: the fingers down, plus taps still inside their minimum hold.
+    private func touchHeldThisTick() -> UInt32 {
+        var held = touchButtons
+        for bit in 0..<Emulator.buttonCount where tapHold[bit] > 0 {
+            held |= 1 << UInt32(bit)
+            tapHold[bit] -= 1
+        }
+        return held
+    }
     private let controllers = Controllers()
     private let audio = AudioOut()
     private var link: CADisplayLink?
@@ -148,7 +175,7 @@ final class Emulator: ObservableObject {
         guard owed >= Emulator.frameTime * 0.75 else { return }
         owed = min(owed - Emulator.frameTime, Emulator.frameTime)
 
-        pd_ios_set_buttons(touchButtons | controllers.buttons)
+        pd_ios_set_buttons(touchHeldThisTick() | controllers.buttons)
         let result = pd_ios_tick(UInt32((dt * 1000).rounded()))
         if result & Int32(PD_IOS_TOP_CHANGED) != 0 { top.upload(pd_ios_top()) }
         if result & Int32(PD_IOS_BOTTOM_CHANGED) != 0 { bottom.upload(pd_ios_bottom()) }

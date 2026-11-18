@@ -52,14 +52,16 @@ int main(int argc, char** argv) {
         if (i == 300) keys |= PD_IOS_Y; // the QUICK MENU, then closed again
         if (i == 330) keys |= PD_IOS_B;
         pd_ios_set_buttons(keys);
-        if (i == 200) pd_ios_touch(260, 226, true); // STATES on the tab bar
-        if (i == 203) pd_ios_touch(0, 0, false);
+        if (i == 200) { // a quick tap on STATES: down and up between two ticks
+            pd_ios_touch(260, 226, true);
+            pd_ios_touch(0, 0, false);
+        }
         int r = pd_ios_tick(16);
         if (r & PD_IOS_TOP_CHANGED) tops++;
         if (r & PD_IOS_BOTTOM_CHANGED) bottoms++;
         if (r & PD_IOS_LEAVE) printf("leave asked at %d\n", i);
         sound += pd_ios_audio_read(audio, 800); // the audio thread, about a refresh's worth
-        if (i >= 203 && i <= 205 && (r & PD_IOS_BOTTOM_CHANGED)) tapped = true; // the lift is the tap
+        if (i >= 200 && i <= 205 && (r & PD_IOS_BOTTOM_CHANGED)) tapped = true;
         if (i == 205 || i == 320) {
             const uint32_t* t = (const uint32_t*) (i == 205 ? pd_ios_bottom() : pd_ios_top());
             int w = i == 205 ? PD_IOS_BOTTOM_W : PD_IOS_TOP_W, h = i == 205 ? PD_IOS_BOTTOM_H : PD_IOS_TOP_H;
