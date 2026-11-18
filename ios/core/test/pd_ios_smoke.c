@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
         uint32_t keys = (i / 30) % 2 ? PD_IOS_A : 0;
         if (i == 300) keys |= PD_IOS_Y; // the QUICK MENU, then closed again
         if (i == 330) keys |= PD_IOS_B;
-        if (i >= 400 && i < 460) keys |= PD_IOS_ZR; // FF held: its notice
+        if (i == 400 || i == 460) keys |= PD_IOS_ZR; // FF toggled on, then off: its notices
         pd_ios_set_buttons(keys);
         if (i == 200) { // a quick tap on STATES: down and up between two ticks
             pd_ios_touch(260, 226, true);
@@ -62,6 +62,8 @@ int main(int argc, char** argv) {
         if (r & PD_IOS_BOTTOM_CHANGED) bottoms++;
         if (r & PD_IOS_LEAVE) printf("leave asked at %d\n", i);
         sound += pd_ios_audio_read(audio, 800); // the audio thread, about a refresh's worth
+        if (i == 430 && !pd_ios_ff_on()) printf("FAIL: FF didn't stay on after a press\n"), failures++;
+        if (i == 470 && pd_ios_ff_on()) printf("FAIL: FF didn't go off on the second press\n"), failures++;
         if (i == 410 || i == 470) {
             const uint32_t* t = (const uint32_t*) pd_ios_top();
             for (int k = 0; k < PD_IOS_TOP_W * PD_IOS_TOP_H; k++)

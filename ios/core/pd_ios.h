@@ -72,6 +72,8 @@ void pd_ios_set_refresh(double hz);
 // One screen held sideways: the app shows the game alone (the companion over it on demand), so it takes its own ASPECT,
 // EXPAND by default: the overworld past the GBA's edges, as PokeDaisy on a one-screen device. Its own pick is kept.
 void pd_ios_set_landscape(bool on);
+// Fast forward is on (PD_IOS_ZR toggles it, as the QUICK MENU's FF does).
+bool pd_ios_ff_on(void);
 // The companion has the controller's buttons (X gave them to it; X / START / B at its top give them back).
 bool pd_ios_companion_focused(void);
 // Gives the controller's buttons to the companion (when it can take them) or back to the game.

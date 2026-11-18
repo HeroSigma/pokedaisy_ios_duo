@@ -43,7 +43,7 @@ window iOS gives it, held upright or sideways, and turns with the device on the 
 ## Controls
 
 On screen: a movement stick (it centres itself where your thumb lands; straight directions get the wider share, so
-walking a line is easy), A, B, L, R, SELECT, START, **MENU** (the QUICK MENU) and **FF** (fast-forward while held).
+walking a line is easy), A, B, L, R, SELECT, START, **MENU** (the QUICK MENU) and **FF** (fast-forward: a press turns it on, the next off).
 Tap the companion to use it. Its SETTINGS tab has CLOSE GAME, which takes you back to the game list.
 
 A controller's buttons go by where they sit, as on a Nintendo pad:
@@ -56,7 +56,7 @@ A controller's buttons go by where they sit, as on a Nintendo pad:
 | Left face button | Y: the QUICK MENU |
 | L1 / R1 | L / R |
 | L2 | the companion's tab before |
-| R2 | fast-forward while held |
+| R2 | fast-forward on / off |
 | Menu / Options | START / SELECT |
 
 Keyboard: arrows, X = A, Z = B, A / S = L / R, Return = START, Backspace = SELECT, C = X, Q = QUICK MENU, Tab = FF.

@@ -253,6 +253,10 @@ void pd_ios_set_landscape(bool on) {
     session.redraw = true;
 }
 
+bool pd_ios_ff_on(void) {
+    return running && session.ff;
+}
+
 bool pd_ios_companion_focused(void) {
     return running && session.ui.keyFocus;
 }
@@ -695,7 +699,9 @@ int pd_ios_tick(unsigned ms) {
 
     uint32_t gameHeld = held & ~withheld & 0x3FF, gameDown = down & ~withheld & 0x3FF;
     struct pd_input in = { .held = gameHeld, .down = gameDown, .quickMenu = (down & PD_IOS_Y) && !session.ui.keyFocus,
-                           .ffHeld = (held & PD_IOS_ZR) != 0, .stickAngle = -1 };
+                           .stickAngle = -1 };
+    // FF is a toggle: a press of FF (R2, Tab) turns it on, the next turns it off.
+    if (down & PD_IOS_ZR) session.ffToggled = !session.ffToggled;
     unsigned before = session.frame;
     pd_session_tick(&session, &in, ms);
     if (session.ff != ffWas) {

@@ -263,7 +263,7 @@ struct GameScreen: View {
             Spacer()
             HStack(spacing: 8) {
                 ControlButton(label: "FF", bit: PD_IOS_ZR, size: CGSize(width: width * 0.42, height: 26), round: false,
-                              accent: Color(red: 0.2, green: 0.3, blue: 0.45))
+                              accent: Color(red: 0.2, green: 0.3, blue: 0.45), showsFF: true)
                 ControlButton(label: "START", bit: PD_IOS_START, size: CGSize(width: width * 0.42, height: 26), round: false)
             }
         }

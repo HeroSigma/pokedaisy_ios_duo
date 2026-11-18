@@ -15,6 +15,8 @@ final class Emulator: ObservableObject {
     @Published private(set) var controllerConnected = false
     /// The controller's buttons are the companion's (X gave them to it, as on the 3DS).
     @Published private(set) var companionFocused = false
+    /// Fast forward is on (FF toggles it).
+    @Published private(set) var ffOn = false
     /// Sideways, the companion over the game: opened by its button or the controller's X, closed by either again.
     @Published var companionOpen = false
     var showsCompanionOverlay: Bool { companionOpen || companionFocused }
@@ -140,6 +142,7 @@ final class Emulator: ObservableObject {
         running = false
         companionOpen = false
         companionFocused = false
+        ffOn = false
         UIApplication.shared.isIdleTimerDisabled = false
     }
 
@@ -203,6 +206,8 @@ final class Emulator: ObservableObject {
         let result = pd_ios_tick(UInt32((dt * 1000).rounded()))
         if result & Int32(PD_IOS_TOP_CHANGED) != 0 { top.upload(pd_ios_top()) }
         if result & Int32(PD_IOS_BOTTOM_CHANGED) != 0 { bottom.upload(pd_ios_bottom()) }
+        let ff = pd_ios_ff_on()
+        if ff != ffOn { ffOn = ff }
         let focused = pd_ios_companion_focused()
         if focused != companionFocused {
             companionFocused = focused

@@ -10,16 +10,19 @@ struct ControlButton: View {
     var size: CGSize = CGSize(width: 64, height: 64)
     var round = true
     var accent = Color(white: 0.22)
+    /// FF's button: lit while fast forward is on (it's a toggle).
+    var showsFF = false
     @State private var pressed = false
 
     var body: some View {
+        let lit = pressed || (showsFF && emulator.ffOn)
         let shape = RoundedRectangle(cornerRadius: round ? min(size.width, size.height) / 2 : 8, style: .continuous)
         Text(label)
             .font(.system(size: max(10, min(size.width, size.height) * (round ? 0.36 : 0.32)), weight: .heavy, design: .rounded))
-            .foregroundStyle(.white.opacity(pressed ? 1 : 0.85))
+            .foregroundStyle(.white.opacity(lit ? 1 : 0.85))
             .frame(width: size.width, height: size.height)
-            .background(shape.fill(pressed ? accent.opacity(1) : accent.opacity(0.75)))
-            .overlay(shape.stroke(.white.opacity(pressed ? 0.6 : 0.18), lineWidth: 1.5))
+            .background(shape.fill(lit ? accent.opacity(1) : accent.opacity(0.75)))
+            .overlay(shape.stroke(.white.opacity(lit ? 0.6 : 0.18), lineWidth: 1.5))
             .scaleEffect(pressed ? 0.94 : 1)
             .contentShape(shape)
             .gesture(
@@ -200,7 +203,7 @@ struct FaceButtons: View {
     }
 }
 
-/// SELECT / START and the app's own two: MENU (the QUICK MENU, the 3DS's Y) and FF (held, the 3DS's ZR).
+/// SELECT / START and the app's own two: MENU (the QUICK MENU, the 3DS's Y) and FF (a toggle, the 3DS's ZR).
 struct SmallButtons: View {
     let width: CGFloat
     var body: some View {
@@ -214,7 +217,7 @@ struct SmallButtons: View {
                 ControlButton(label: "MENU", bit: PD_IOS_Y, size: CGSize(width: w, height: h), round: false,
                               accent: Color(red: 0.2, green: 0.35, blue: 0.3))
                 ControlButton(label: "FF", bit: PD_IOS_ZR, size: CGSize(width: w, height: h), round: false,
-                              accent: Color(red: 0.2, green: 0.3, blue: 0.45))
+                              accent: Color(red: 0.2, green: 0.3, blue: 0.45), showsFF: true)
             }
         }
     }

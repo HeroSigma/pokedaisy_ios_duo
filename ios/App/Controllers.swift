@@ -2,7 +2,7 @@ import GameController
 
 /// Game controllers and a hardware keyboard, read once a tick. Buttons go by where they sit, as on a Nintendo pad: the
 /// right face button is A, the bottom one B, the top one X (the buttons to the companion / BACK), the left one Y (the
-/// QUICK MENU); L2 steps the companion's tabs back and R2 holds fast-forward, as the 3DS build has them.
+/// QUICK MENU); L2 steps the companion's tabs back and R2 turns fast-forward on and off, as the 3DS build has them.
 @MainActor
 final class Controllers {
     var onChange: ((Bool) -> Void)?
