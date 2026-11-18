@@ -33,6 +33,7 @@ jobs:
           done
 
   ipa:
+    # GitHub's macOS arm64 runners can be scarce: a job no runner takes is cancelled after a while. Re-run it then.
     needs: smoke
     runs-on: macos-15
     timeout-minutes: 40
