@@ -98,16 +98,7 @@ jobs:
               scanned[$key]=1
               progress=1
               while IFS= read -r dependency; do
-                dependency="${dependency%
-
-      - name: Upload Windows Duo ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: PokeDaisy-Windows-Duo-x64
-          path: dist/PokeDaisy-Windows-Duo-x64.zip
-          if-no-files-found: error
-          retention-days: 14
-\\r'}"
+                dependency=$(printf '%s' "$dependency" | tr -d '\\r')
                 [ -n "$dependency" ] || continue
                 case "${dependency,,}" in
                   api-ms-win-*|ext-ms-win-*|kernel32.dll|user32.dll|gdi32.dll|advapi32.dll|ole32.dll|oleaut32.dll|shell32.dll|shlwapi.dll|ws2_32.dll|winmm.dll|imm32.dll|version.dll|setupapi.dll|bcrypt.dll|crypt32.dll|comdlg32.dll|comctl32.dll|dbghelp.dll|dinput8.dll|dxgi.dll|d3d9.dll|d3d11.dll|opengl32.dll|glu32.dll|rpcrt4.dll|secur32.dll|ntdll.dll|msvcrt.dll|ucrtbase.dll|cfgmgr32.dll|hid.dll|iphlpapi.dll|winspool.drv|normaliz.dll|powrprof.dll|propsys.dll|userenv.dll|wldap32.dll|windowscodecs.dll|winhttp.dll|wininet.dll|uxtheme.dll|dwmapi.dll|dwrite.dll|d2d1.dll|msimg32.dll)
