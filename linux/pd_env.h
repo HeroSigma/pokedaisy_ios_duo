@@ -32,4 +32,15 @@ struct pd_hud {
   int active;
 };
 
+/* Optional desktop dual-window companion frame. A frontend that supports a separate
+ * companion window returns true, even for an inactive probe (active=0).
+ * Pixels are XRGB8888 and valid only for the duration of the environment call;
+ * the frontend must copy them before returning. */
+#define PD_ENV_SET_COMPANION_FRAME 0x20004
+struct pd_companion_frame {
+  const uint32_t *pixels;
+  int width, height;
+  int active;
+};
+
 #endif
