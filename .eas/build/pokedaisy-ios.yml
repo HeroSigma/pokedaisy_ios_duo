@@ -1,0 +1,10 @@
+build:
+  name: PokeDaisy native unsigned iPhone IPA
+  steps:
+    - eas/checkout
+    - run:
+        name: Build native C core and unsigned SwiftUI IPA
+        command: bash scripts/build-eas-ios.sh
+    - eas/upload_artifact:
+        inputs:
+          path: artifacts/PokeDaisy-iOS-unsigned.ipa
