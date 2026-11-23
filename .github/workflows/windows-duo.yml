@@ -1,0 +1,95 @@
+name: Windows Duo
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/windows-dual-window-v2
+    paths:
+      - '.github/workflows/windows-duo.yml'
+      - 'linux/**'
+      - 'windows/**'
+      - 'libretro/**'
+      - '3ds/core/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-duo:
+    name: Build Windows Duo (x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install MSYS2 and MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            unzip
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+
+      - name: Build GB/GBC libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S libretro -B build/win-gbc -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-gbc --target pokedaisy_gbc_libretro -j 4
+
+      - name: Build GBA libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S libretro/armgba -B build/win-gba -DCMAKE_BUILD_TYPE=Release -DARMGBA_JIT=OFF
+          cmake --build build/win-gba --target pokedaisy_gba_libretro -j 4
+
+      - name: Build DS libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S windows/ds-core -B build/win-ds -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-ds -j 4
+
+      - name: Build Windows Duo host
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S windows -B build/win-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-host -j 4
+
+      - name: Package Windows Duo
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/PokeDaisy-Windows-Duo
+          cp build/win-host/PokeDaisy.exe dist/PokeDaisy-Windows-Duo/
+          cp /mingw64/bin/SDL2.dll dist/PokeDaisy-Windows-Duo/
+          for dll in pokedaisy_gbc_libretro.dll pokedaisy_gba_libretro.dll pokedaisy_ds_libretro.dll; do
+            found=$(find build/win-gbc build/win-gba build/win-ds -type f -name "$dll" -print -quit)
+            if [ -z "$found" ]; then
+              echo "Missing required core: $dll" >&2
+              exit 1
+            fi
+            cp "$found" dist/PokeDaisy-Windows-Duo/
+          done
+          cd dist
+          zip -r PokeDaisy-Windows-Duo-x64.zip PokeDaisy-Windows-Duo
+
+      - name: Upload Windows Duo ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PokeDaisy-Windows-Duo-x64
+          path: dist/PokeDaisy-Windows-Duo-x64.zip
+          if-no-files-found: error
+          retention-days: 14
