@@ -711,6 +711,7 @@ static char settingsPath[1100];
 static char pdDir[1050]; // <save dir>/pokedaisy: settings.ini and FLIGHT AREA's seen maps ("" = none)
 
 static bool companion, companionWas, haveGame;
+static bool duoHost; /* separate companion window: available only to an opt-in host */
 static int frames;
 
 /* the HUD over the overworld (B2) */
@@ -1395,6 +1396,12 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
     hudHost = realEnv && realEnv(PD_ENV_SET_HUD, &probe);
   }
   {
+    /* An inactive frame is a capability probe. Normal libretro frontends
+     * return false, retaining the original full-screen companion behavior. */
+    struct pd_companion_frame probe = {0};
+    duoHost = realEnv && realEnv(PD_ENV_SET_COMPANION_FRAME, &probe);
+  }
+  {
     struct retro_audio_buffer_status_callback abc = {audio_status_both};
     realEnv(RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK, &abc);
   }
@@ -1669,7 +1676,7 @@ static void hud_press(int id) {
       jobFrames = 0;
     }
   }
-  if (id != HUD_PC)
+  if (id != HUD_PC && !duoHost)
     companion = true;
 }
 
@@ -1833,7 +1840,9 @@ RETRO_API void retro_run(void) {
   }
   bool wasCompanion = companion;
   if (down(companionBtn) && !hudFocus) {
-    companion = !companion;
+    /* With a separate desktop companion, X/Tab must never replace gameplay. */
+    if (!duoHost)
+      companion = !companion;
     quickOpen = flyList = repelList = false;
     flyAsk = 0;
   }
@@ -2064,7 +2073,8 @@ RETRO_API void retro_run(void) {
                                       : "Fast forward unavailable");
         break;
       case QUICK_COMPANION:
-        companion = true;
+        if (!duoHost)
+          companion = true;
         break;
       case QUICK_HUD:
         hud_focus_start();
@@ -2339,7 +2349,8 @@ RETRO_API void retro_run(void) {
     PD_BE_AUDIO(silence, 549);
   }
 
-  if (!snap.valid || (companion && !wasCompanion) || (!companion && frames % 30 == 0))
+  if (!snap.valid || (companion && !wasCompanion) ||
+      (!companion && frames % (duoHost ? 6 : 30) == 0))
     snapshot();
   companionWas = companion;
   frames++;
@@ -2619,6 +2630,21 @@ RETRO_API void retro_run(void) {
   }
   present();
   haveGameFrame = !companion && !quickOpen && !hudFocus;
+  if (duoHost && !companion) {
+    /* The game frame has already been sent to realVideo. Reuse the RGB
+     * scratch canvas for the existing companion UI, then hand it to the
+     * desktop window before the next game frame can overwrite it.
+     * This does not pause emulation or change the gameplay geometry. */
+    const int duoW = 320, duoH = 240;
+    struct pd_canvas duoCanvas;
+    pd_canvas_init(&duoCanvas, duoW, duoH, cvs);
+    memset(cvs, 0, (size_t)duoW * duoH * sizeof *cvs);
+    pd_ui_update(&ui, &snap);
+    ui.focusId = focusId;
+    pd_ui_draw(&ui, &duoCanvas, &game, &snap, &host);
+    struct pd_companion_frame frame = {cvs, duoW, duoH, 1};
+    realEnv(PD_ENV_SET_COMPANION_FRAME, &frame);
+  }
   PF_T(td2);
   pf_add(PF_PRESENT, td2 - td1);
   pf_add(PF_TOTAL, td2 - t0);
