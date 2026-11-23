@@ -130,7 +130,7 @@ static void duo_window_destroy(void)
 
     companionWindowVisible = false;
 }
-#endifs
+#endif
 static SDL_AudioDeviceID audio;
 static volatile sig_atomic_t running = 1;
 static int appError;
