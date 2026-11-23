@@ -712,6 +712,7 @@ static char pdDir[1050]; // <save dir>/pokedaisy: settings.ini and FLIGHT AREA's
 
 static bool companion, companionWas, haveGame;
 static bool duoHost; /* separate companion window: available only to an opt-in host */
+static bool duoPointerWasPressed;
 static int frames;
 
 /* the HUD over the overworld (B2) */
@@ -1552,6 +1553,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
   focusId = -1;
   focus_new_screen();
   companion = hudFocus = false;
+  duoPointerWasPressed = false;
   haveGame = true;
   return true;
 }
@@ -2641,6 +2643,33 @@ RETRO_API void retro_run(void) {
     memset(cvs, 0, (size_t)duoW * duoH * sizeof *cvs);
     pd_ui_update(&ui, &snap);
     ui.focusId = focusId;
+
+    /* Companion mouse belongs to Window 2, not the game framebuffer.
+     * Feed its native coordinates through the existing touch hit map.
+     * A release activates buttons; dragging continues scrolling lists. */
+    struct pd_companion_pointer ptr = {0};
+    const bool inputAvailable = realEnv(PD_ENV_GET_COMPANION_POINTER, &ptr);
+    const bool pressed = inputAvailable && ptr.pressed && ptr.x >= 0 && ptr.y >= 0;
+    if (pressed)
+      pd_ui_touch(&ui, ptr.x, ptr.y, true);
+    else if (duoPointerWasPressed)
+      pd_ui_touch(&ui, 0, 0, false);
+    duoPointerWasPressed = pressed;
+
+    /* Safe companion actions are applied immediately. Native game-control
+     * actions require their own guarded workflow and are not dispatched by
+     * this first mouse-navigation integration. */
+    switch (pd_ui_take_action(&ui)) {
+    case PD_ACTION_SETTINGS_CHANGED:
+      pd_settings_save(&settings, settingsPath);
+      pd_look_apply(&game, &settings);
+      pd_flight_area_resend();
+      hudDrawnKey = 0;
+      break;
+    default:
+      break;
+    }
+
     pd_ui_draw(&ui, &duoCanvas, &game, &snap, &host);
     struct pd_companion_frame frame = {cvs, duoW, duoH, 1};
     realEnv(PD_ENV_SET_COMPANION_FRAME, &frame);
