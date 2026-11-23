@@ -2,6 +2,7 @@ build:
   name: PokeDaisy native unsigned iPhone IPA
   steps:
     - eas/checkout
+    - eas/install_node_modules
     - run:
         name: Build native C core and unsigned SwiftUI IPA
         command: bash scripts/build-eas-ios.sh
