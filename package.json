@@ -1,0 +1,6 @@
+{
+  "name": "pokedaisy-ios-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Build metadata for native PokeDaisy EAS iOS CI; no Expo runtime dependencies."
+}
