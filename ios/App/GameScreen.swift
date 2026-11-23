@@ -32,7 +32,7 @@ struct GameScreen: View {
 
     static func layout(for size: CGSize, touch: Bool) -> Layout {
         let W = size.width, H = size.height
-        let strip = touch ? min(max(H * 0.24, 170), 240) : 0
+        let strip = touch ? min(max(H * 0.33, 240), 320) : 0
         let column = touch ? min(max(W * 0.15, 130), 190) : 0
         let stackH = 1 / gameAspect + 1 / companionAspect // a stacked column's height per point of width
         let under = max(0, min(W, (H - strip) / stackH))
@@ -218,29 +218,56 @@ struct GameScreen: View {
 
     // MARK: the controls
 
-    private func strip(width: CGFloat, height: CGFloat) -> some View {
-        let pad = min(height * 0.82, width * 0.36)
-        return VStack(spacing: 6) {
-            HStack {
-                Shoulder(label: "L", bit: PD_IOS_L, width: min(90, width * 0.2))
-                Spacer()
-                ControlsToggle(shown: true)
-                Spacer()
-                Shoulder(label: "R", bit: PD_IOS_R, width: min(90, width * 0.2))
-            }
-            .padding(.horizontal, 12)
-            HStack(spacing: 0) {
-                Joystick(size: pad * 0.9)
-                    .frame(width: pad)
-                Spacer(minLength: 4)
-                SmallButtons(width: max(110, width - 2 * pad - 16))
-                Spacer(minLength: 4)
-                FaceButtons(size: pad * 0.86)
-                    .frame(width: pad)
-            }
+    
+private func strip(width: CGFloat, height: CGFloat) -> some View {
+    let mainSize = max(100, min(width * 0.42, height - 135))
+
+    return VStack(spacing: 8) {
+
+        // Shoulder controls
+        HStack {
+            Shoulder(
+                label: "L",
+                bit: PD_IOS_L,
+                width: min(105, width * 0.24)
+            )
+
+            Spacer()
+
+            ControlsToggle(shown: true)
+
+            Spacer()
+
+            Shoulder(
+                label: "R",
+                bit: PD_IOS_R,
+                width: min(105, width * 0.24)
+            )
         }
-        .frame(width: width, height: height)
+        .padding(.horizontal, 12)
+
+        Spacer(minLength: 0)
+
+        // Larger joystick and action buttons
+        HStack(alignment: .center) {
+            Joystick(size: mainSize)
+
+            Spacer(minLength: 8)
+
+            FaceButtons(size: mainSize)
+        }
+        .padding(.horizontal, 10)
+
+        Spacer(minLength: 0)
+
+        // Secondary controls underneath
+        SmallButtons(width: 175)
+            .padding(.bottom, 8)
     }
+    .padding(.vertical, 8)
+    .frame(width: width, height: height)
+}
+
 
     private func leftColumn(width: CGFloat, height: CGFloat, companionButton: Bool = false) -> some View {
         VStack(spacing: 16) {
