@@ -61,6 +61,9 @@ static SDL_Renderer *companionRenderer = NULL;
 static SDL_Texture *companionTexture = NULL;
 static int companionFrameW = 0, companionFrameH = 0;
 static bool companionWindowVisible = false;
+static int companionMouseX = 0, companionMouseY = 0;
+static bool companionMouseHeld = false;
+static int companionMousePulse = 0;
 
 static void duo_window_create(void)
 {
@@ -160,6 +163,42 @@ static void duo_window_present(void)
     SDL_RenderPresent(companionRenderer);
 }
 
+/* Convert second-window mouse coordinates through the same letterbox
+ * rectangle used by duo_window_present(), so resized windows click accurately. */
+static void duo_mouse_at(int x, int y)
+{
+    if (!companionRenderer)
+        return;
+    int w = 480, h = 360;
+    SDL_GetRendererOutputSize(companionRenderer, &w, &h);
+    const int fw = companionFrameW > 0 ? companionFrameW : 320;
+    const int fh = companionFrameH > 0 ? companionFrameH : 240;
+    const float scale = SDL_min((float)w / fw, (float)h / fh);
+    if (scale <= 0)
+        return;
+    const float ox = (w - fw * scale) * 0.5f;
+    const float oy = (h - fh * scale) * 0.5f;
+    companionMouseX = (int)((x - ox) / scale);
+    companionMouseY = (int)((y - oy) / scale);
+    if (companionMouseX < 0 || companionMouseX >= fw ||
+        companionMouseY < 0 || companionMouseY >= fh) {
+        companionMouseX = -1;
+        companionMouseY = -1;
+    }
+}
+
+static bool duo_window_pointer(struct pd_companion_pointer *p)
+{
+    if (!companionRenderer || !p)
+        return false;
+    p->x = companionMouseX;
+    p->y = companionMouseY;
+    p->pressed = companionMouseHeld || companionMousePulse > 0;
+    if (companionMousePulse > 0)
+        companionMousePulse--;
+    return true;
+}
+
 static void duo_window_destroy(void)
 {
     if (companionTexture) {
@@ -178,6 +217,8 @@ static void duo_window_destroy(void)
     }
 
     companionWindowVisible = false;
+    companionMouseHeld = false;
+    companionMousePulse = 0;
 }
 #endif
 static SDL_AudioDeviceID audio;
@@ -549,25 +590,33 @@ static void events(void) {
 
         if (e.type == SDL_WINDOWEVENT &&
             e.window.windowID == duoId) {
-
-            if (e.window.event ==
-                SDL_WINDOWEVENT_CLOSE) {
+            if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
                 SDL_HideWindow(companionWindow);
                 companionWindowVisible = false;
+                companionMouseHeld = false;
+                companionMousePulse = 0;
+            } else if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                companionMouseHeld = false;
             }
-
             continue;
         }
 
-        if ((e.type == SDL_MOUSEMOTION &&
-             e.motion.windowID == duoId) ||
-            ((e.type == SDL_MOUSEBUTTONDOWN ||
-              e.type == SDL_MOUSEBUTTONUP) &&
-             e.button.windowID == duoId) ||
-            (e.type == SDL_MOUSEWHEEL &&
-             e.wheel.windowID == duoId)) {
+        if (e.type == SDL_MOUSEMOTION && e.motion.windowID == duoId) {
+            duo_mouse_at(e.motion.x, e.motion.y);
             continue;
         }
+        if ((e.type == SDL_MOUSEBUTTONDOWN ||
+             e.type == SDL_MOUSEBUTTONUP) && e.button.windowID == duoId) {
+            if (e.button.button == SDL_BUTTON_LEFT) {
+                duo_mouse_at(e.button.x, e.button.y);
+                companionMouseHeld = e.type == SDL_MOUSEBUTTONDOWN;
+                if (companionMouseHeld && companionMouseX >= 0)
+                    companionMousePulse = 1;
+            }
+            continue;
+        }
+        if (e.type == SDL_MOUSEWHEEL && e.wheel.windowID == duoId)
+            continue;
     }
 #endif
     if (e.type == SDL_QUIT)
@@ -1223,6 +1272,8 @@ static bool environment(unsigned cmd, void *data) {
 #ifdef _WIN32
   case PD_ENV_SET_COMPANION_FRAME:
     return duo_window_frame((const struct pd_companion_frame *)data);
+  case PD_ENV_GET_COMPANION_POINTER:
+    return duo_window_pointer((struct pd_companion_pointer *)data);
 #endif
   case PD_ENV_SET_TOUCH_PANEL: {
     const struct pd_touch_panel *p = data;
