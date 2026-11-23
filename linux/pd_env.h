@@ -43,4 +43,13 @@ struct pd_companion_frame {
   int active;
 };
 
+/* Companion mouse state in native 320x240 companion pixels. The host returns
+ * false if independent companion input is unavailable. A short click must be
+ * held across at least one core tick so release-driven UI actions are not lost. */
+#define PD_ENV_GET_COMPANION_POINTER 0x20005
+struct pd_companion_pointer {
+  int x, y;
+  int pressed;
+};
+
 #endif
