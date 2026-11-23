@@ -1,0 +1,29 @@
+# Pokémon Legends Awakening
+# Experimental pokeemerald-expansion profile.
+# Addresses from the November 23, 2026 ELF.
+# ROM SHA-1: 552ec33df5b6c31409fee1b8e5346e4a8de83ce9
+#
+# Inherited Emerald addresses and layouts are not yet
+# verified. Do not enable unsupported companion features.
+
+[config.legends_awakening]
+base = 'emerald'
+
+playerParty = 0x02038E5C
+playerPartyCount = 0x020397BC
+
+battleMons = 0x02000468
+battleTypeFlags = 0x020006D0
+battlerPositions = 0x020006AC
+battlersCount = 0x020006B8
+
+gMain = 0x030065E0
+mapHeader = 0x020027A0
+bagPockets = 0x020077FC
+
+saveBlock1Ptr = 0x030050E8
+saveBlock2Ptr = 0x030050E4
+
+speciesMask = 0x07FF
+moveMask = 0x07FF
+ppMask = 0x7F

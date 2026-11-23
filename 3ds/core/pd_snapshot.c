@@ -492,24 +492,62 @@ void pd_snapshot_read(struct pd_snapshot* s, const struct pd_game* g, pd_read_fn
     s->money = -1;
     const struct pd_config* cfg = g->cfg;
     if (!cfg) return;
+
+    // Experimental Legends Awakening profile.
+    // Read only the verified party data for now.
+    const bool legendsPartyOnly =
+        strcmp(g->sha1,
+               "552ec33df5b6c31409fee1b8e5346e4a8de83ce9") == 0;
+
     if (cfg->gb) {
         pd_gb_snapshot_read(s, cfg, read, ctx);
         return;
     }
     s->valid = true;
-    read_u32(read, ctx, cfg->gMain + (cfg->frameCounterOff ? cfg->frameCounterOff : 0x24), &s->frame);
+
+    if (!legendsPartyOnly) {
+        read_u32(read, ctx,
+                 cfg->gMain +
+                     (cfg->frameCounterOff ? cfg->frameCounterOff : 0x24),
+                 &s->frame);
+    }
+
+
 
     // --- party ---
     uint8_t count = 0;
     read(ctx, cfg->playerPartyCount, &count, 1);
     if (count > PD_PARTY_SIZE) count = PD_PARTY_SIZE;
-    const struct pd_party_layout* lay = cfg->partyLayout ? cfg->partyLayout : &pd_party_layout_vanilla;
+
+    const struct pd_party_layout* lay =
+        cfg->partyLayout ? cfg->partyLayout : &pd_party_layout_vanilla;
+
     uint8_t raw[PD_PARTY_SIZE * MON_SIZE_MAX];
+
     if (count && read(ctx, cfg->playerParty, raw, count * lay->size)) {
         for (int i = 0; i < count; i++) {
-            if (pd_decode_party_mon_c(raw + i * lay->size, lay, cfg, &s->party[s->partyCount])) s->partyCount++;
+            if (pd_decode_party_mon_c(
+                    raw + i * lay->size,
+                    lay,
+                    cfg,
+                    &s->party[s->partyCount])) {
+                s->partyCount++;
+            }
         }
     }
+
+    // Legends Awakening: experimental party-only mode.
+    // Skip unverified battle, bag, map and save-data reads.
+
+    // Legends Awakening: party-only compatibility test.
+    if (legendsPartyOnly) {
+        // Expansion stores held-item IDs in the low 10 bits.
+        for (int i = 0; i < s->partyCount; i++) {
+            s->party[i].heldItem &= 0x03FF;
+        }
+        return;
+    }
+
 
     // --- battle --- (gMain.inBattle is bit 1 of the byte at +0x439)
     s->foeActive = s->foeNext = -1;
