@@ -55,6 +55,82 @@
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
+#ifdef _WIN32
+static SDL_Window *companionWindow = NULL;
+static SDL_Renderer *companionRenderer = NULL;
+static bool companionWindowVisible = false;
+
+static void duo_window_create(void)
+{
+    if (companionWindow)
+        return;
+
+    companionWindow = SDL_CreateWindow(
+        "PokeDaisy - Live Companion",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        480,
+        640,
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN
+    );
+
+    if (!companionWindow) {
+        SDL_Log("Duo window: %s", SDL_GetError());
+        return;
+    }
+
+    companionRenderer = SDL_CreateRenderer(
+        companionWindow, -1,
+        SDL_RENDERER_ACCELERATED
+    );
+
+    if (!companionRenderer)
+        companionRenderer = SDL_CreateRenderer(
+            companionWindow, -1, SDL_RENDERER_SOFTWARE
+        );
+
+    if (!companionRenderer) {
+        SDL_Log("Duo renderer: %s", SDL_GetError());
+        SDL_DestroyWindow(companionWindow);
+        companionWindow = NULL;
+        return;
+    }
+
+    SDL_SetRenderDrawColor(
+        companionRenderer, 24, 42, 48, 255
+    );
+
+    SDL_ShowWindow(companionWindow);
+    companionWindowVisible = true;
+}
+
+static void duo_window_present(void)
+{
+    if (!companionWindowVisible || !companionRenderer)
+        return;
+
+    SDL_SetRenderDrawColor(
+        companionRenderer, 24, 42, 48, 255
+    );
+    SDL_RenderClear(companionRenderer);
+    SDL_RenderPresent(companionRenderer);
+}
+
+static void duo_window_destroy(void)
+{
+    if (companionRenderer) {
+        SDL_DestroyRenderer(companionRenderer);
+        companionRenderer = NULL;
+    }
+
+    if (companionWindow) {
+        SDL_DestroyWindow(companionWindow);
+        companionWindow = NULL;
+    }
+
+    companionWindowVisible = false;
+}
+#endifs
 static SDL_AudioDeviceID audio;
 static volatile sig_atomic_t running = 1;
 static int appError;
@@ -417,6 +493,34 @@ static void events(void) {
   script_rawkeys();
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
+    #ifdef _WIN32
+    if (companionWindow) {
+        const Uint32 duoId =
+            SDL_GetWindowID(companionWindow);
+
+        if (e.type == SDL_WINDOWEVENT &&
+            e.window.windowID == duoId) {
+
+            if (e.window.event ==
+                SDL_WINDOWEVENT_CLOSE) {
+                SDL_HideWindow(companionWindow);
+                companionWindowVisible = false;
+            }
+
+            continue;
+        }
+
+        if ((e.type == SDL_MOUSEMOTION &&
+             e.motion.windowID == duoId) ||
+            ((e.type == SDL_MOUSEBUTTONDOWN ||
+              e.type == SDL_MOUSEBUTTONUP) &&
+             e.button.windowID == duoId) ||
+            (e.type == SDL_MOUSEWHEEL &&
+             e.wheel.windowID == duoId)) {
+            continue;
+        }
+    }
+#endif
     if (e.type == SDL_QUIT)
       running = 0;
     if (e.type == SDL_JOYDEVICEADDED && !SDL_IsGameController(e.jdevice.which))
@@ -1303,6 +1407,9 @@ static void present_game(const struct pd_menu *menu) {
     overlay_draw(false);
   uint64_t t = SDL_GetPerformanceCounter();
   SDL_RenderPresent(renderer);
+  #ifdef _WIN32
+    duo_window_present();
+#endif
   presentMs += (double)(SDL_GetPerformanceCounter() - t) * 1000.0 / SDL_GetPerformanceFrequency();
 }
 static bool capture(const char *path) {
@@ -2556,7 +2663,12 @@ int main(int argc, char **argv) {
   // never text.
   SDL_StopTextInput();
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-  audio_open();
+
+#ifdef _WIN32
+duo_window_create();
+#endif
+
+audio_open();
   rawTrimui = getenv("POCKET_RAW_TRIMUI") && !strcmp(getenv("POCKET_RAW_TRIMUI"), "1");
   snprintf(path, sizeof path, "%s/gamecontrollerdb.txt", root);
   if (access(path, R_OK) == 0) {
@@ -2719,7 +2831,10 @@ int main(int argc, char **argv) {
   if (overlayTexture)
     SDL_DestroyTexture(overlayTexture);
   if (lcdTexture)
-    SDL_DestroyTexture(lcdTexture);
+  SDL_DestroyTexture(lcdTexture);
+    #ifdef _WIN32
+duo_window_destroy();
+#endif
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
