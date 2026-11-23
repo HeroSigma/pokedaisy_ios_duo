@@ -12,7 +12,7 @@ permissions:
   contents: read
 concurrency:
   group: ios-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   smoke:
     runs-on: ubuntu-22.04
@@ -33,12 +33,11 @@ jobs:
           done
 
   ipa:
-    # GitHub's xcode-27 image (a preview: macOS 27, Xcode 27 with the iOS 27.1 SDK and the iPhone Duo simulator), the runner the
-    # owner's bcd-games fork builds on: macos-15 / macos-15-intel jobs were never picked up for this fork (2026-11-18).
-    # iPhone Duo lays an app out by the SDK its executable records (LC_BUILD_VERSION): built with an SDK older than iOS 27.1 it
-    # runs centred on the inner display with empty space around it (Apple, "Prepare your app for iPhone Duo").
+    # Use the GA macOS 26 image as a fallback after repeated xcode-27 runner acquisition failures.
+    # The workflow selects the latest installed stable Xcode at runtime.
+    # The iPhone Duo SDK compatibility check remains below for builds targeting that device.
     needs: smoke
-    runs-on: xcode-27
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
