@@ -453,6 +453,15 @@ struct known_rom {
     enum pd_guide_id guide;
 };
 static const struct known_rom KNOWN_ROMS[] = {
+
+    // Legends Awakening: experimental expansion profile.
+    // November 23, 2026 build; party support under test.
+    {"552ec33df5b6c31409fee1b8e5346e4a8de83ce9",
+     &PD_CONFIG_LEGENDS_AWAKENING,
+     PD_GAME_EMERALD,
+     "Pokémon Legends Awakening",
+     PD_GUIDE_NONE},
+
     // Guessed from the retail layout: the ROM's code reads the same addresses as often as retail's does (unverified on a save,
     // except Altered Emerald). Scorched Silver, below, reads none of them.
     {"b1d5feccdf9f1b2b025c5ff6062ce97134b1d0e7", &PD_CONFIG_EMERALD, PD_GAME_EMERALD, "Pokémon Altered Emerald (unverified)",
