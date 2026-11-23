@@ -7,7 +7,7 @@
 <p>
   <a href="https://github.com/lidor30/pokedaisy/releases/latest"><img src="https://img.shields.io/github/v/release/lidor30/pokedaisy?style=for-the-badge&label=release&color=2f81f7" alt="Latest PokeDaisy release"></a>
   <a href="https://github.com/lidor30/pokedaisy/releases"><img src="https://img.shields.io/github/downloads/lidor30/pokedaisy/total?style=for-the-badge&label=downloads&color=5c8a3c" alt="Total downloads"></a>
-  <a href="https://discord.gg/vcmyKZZV5q"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join PokeDaisy on Discord"></a>
+  <a href="https://discord.gg/vcmyKZZV5q"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv9%2Finvites%2FvcmyKZZV5q%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&label=Discord&color=5865F2&style=for-the-badge&logo=discord&logoColor=white" alt="Join PokeDaisy on Discord"></a>
   <a href="https://www.reddit.com/r/PokeDaisy/"><img src="https://img.shields.io/reddit/subreddit-subscribers/PokeDaisy?style=for-the-badge&logo=reddit&logoColor=white&label=r%2FPokeDaisy&color=FF4500" alt="r/PokeDaisy on Reddit"></a>
 </p>
 
@@ -25,6 +25,12 @@ PokeDaisy plays Game Boy, Game Boy Color, GBA and Nintendo DS games on Android h
 from Red to Black 2 and White 2 and dozens of ROM hacks. Next to the game runs a live companion that reads it as you
 play: your party, bag, map, battle matchups, Pokedex and a spoiler-free guide, drawn in the game's own menu style. On
 a dual-screen handheld it gets the bottom screen; on one screen it opens over the game.
+
+<p align="center">
+  <a href="https://buymeacoffee.com/lidor30g"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Support PokeDaisy on Buy Me a Coffee"></a>
+  <a href="https://www.patreon.com/cw/pokedaisy"><img src="https://img.shields.io/badge/Patreon-support-F96854?style=for-the-badge&logo=patreon&logoColor=white" alt="Support PokeDaisy on Patreon"></a>
+  <a href="https://ko-fi.com/pokedaisy"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Support PokeDaisy on Ko-fi"></a>
+</p>
 
 ## The companion
 
@@ -69,7 +75,7 @@ Also **BAG** (use and give items), **NUZLOCKE** (keeps score of a run), **CARD**
   </tr>
 </table>
 
-EXPAND works in every Gen 3 game, many hacks and the Game Boy's Yellow and Crystal:
+EXPAND works in every Gen 3 game, many hacks and the Game Boy's Red, Blue, Yellow, Gold, Silver and Crystal:
 
 <table>
   <tr>
@@ -135,7 +141,7 @@ Any Android 8.0+ device runs the games.
   <a href="#android"><img src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android"></a>
   <a href="#linux"><img src="https://img.shields.io/badge/Linux-Steam%20Deck%20%C2%B7%20handhelds-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux"></a>
   <a href="#nintendo-3ds"><img src="https://img.shields.io/badge/Nintendo%203DS-preview-D12228?style=for-the-badge&logo=nintendo3ds&logoColor=white" alt="Nintendo 3DS"></a>
-  <img src="https://img.shields.io/badge/Windows-soon-8a8a98?style=for-the-badge&logo=windows&logoColor=white" alt="Windows: coming soon">
+  <a href="#windows"><img src="https://img.shields.io/badge/Windows-beta-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows"></a>
   <img src="https://img.shields.io/badge/iOS-soon-8a8a98?style=for-the-badge&logo=apple&logoColor=white" alt="iOS: coming soon">
 </p>
 
@@ -167,7 +173,13 @@ Guide: [Install on Linux, Steam Deck and handhelds](https://pokedaisy.com/docs/l
 An early preview, for a 3DS with custom firmware and the Homebrew Launcher:
 [`pokedaisy.3dsx`](https://github.com/lidor30/pokedaisy/releases/latest/download/pokedaisy.3dsx). Guide: [Install on a Nintendo 3DS](https://pokedaisy.com/docs/3ds/).
 
-### Windows and iOS
+### Windows
+
+Windows 10 or 11, on a 64-bit PC, in the betas for now: `PokeDaisy-<version>-windows-x86_64.zip` on the
+[releases page](https://github.com/lidor30/pokedaisy/releases). Extract it and start `PokeDaisy.exe`. Guide:
+[Install on Windows](docs/manual/windows-install.md).
+
+### iOS
 
 In the works.
 
@@ -189,6 +201,8 @@ ROM hacks, **in the exact version listed** (another version shows a "not support
 | Yellow (GB)                    | USA/Europe                 |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Yellow (GB)                    | DE / FR / IT / ES          |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Yellow Legacy (GB)             | 1.0.10                     |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ✅   |
+| Red Gen II Graphics (GB)       | 2.0                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ✅   |
+| Yellow Gen II Graphics (GB)    | 1.1                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ✅   |
 | Brown (GB)                     | 6.0.1, 6.1.2               |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Gold / Silver (GBC)            | USA/Europe                 |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Gold / Silver (GBC)            | DE (Goldene Edition, Silberne Edition) |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
@@ -209,7 +223,7 @@ ROM hacks, **in the exact version listed** (another version shows a "not support
 | Ruby                           | ES/DE/FR/IT/JP, rev 0-1    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Sapphire                       | USA, rev 0, 1 and 2        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Sapphire                       | ES/DE/FR/IT/JP, rev 0-1    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
-| Platinum (DS)                  | USA rev 1, FR/ES rev 0     |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
+| Platinum (DS)                  | USA rev 1, FR/ES/DE rev 0  |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | HeartGold (DS)                 | USA, EU, every language    |  ✅   | ✅  |   —    | ✅  |   ✅    |  ✅   |
 | SoulSilver (DS)                | USA, EU, every language    |  ✅   | ✅  |   —    | ✅  |   ✅    |  ✅   |
 | Black (DS)                     | USA/Europe, every language |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
@@ -218,11 +232,14 @@ ROM hacks, **in the exact version listed** (another version shows a "not support
 | White 2 (DS)                   | USA/Europe, every language |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Origin HeartGold (DS)          | 4.0.3 English 1.0.0        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Heartfelt Gold (DS)            | 1.0.15 (+ Zoomed In)       |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
+| Sacred Gold (DS)               | 1.05 (+ Classic)           |  ✅   | ✅  |   —    | ✅  |   ✅    |   —   |
+| Storm Silver (DS)              | 1.05                       |  ✅   | ✅  |   —    | ✅  |   ✅    |   —   |
 | Renegade Platinum (DS)         | 1.2.0, 1.3.0 (+ patches)   |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Blaze Black 2 Redux (DS)       | 1.4.1 (+ Classic, EVless)  |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Volt White 2 Redux (DS)        | 1.4.1 (+ Classic, EVless)  |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   —   |
 | Unbound                        | 2.1.1.1                    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Unbound                        | 2.1.1.1 French             |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
+| Unbound                        | 2.1.1.1 Italian (patch v7) |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Radical Red                    | 4.1                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Gaia                           | 3.2                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Odyssey                        | 4.1.1                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
@@ -234,8 +251,15 @@ ROM hacks, **in the exact version listed** (another version shows a "not support
 | FireRed Rocket Edition         | the one release            |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Ash Gray                       | 4.5.3, Fork Bug Fix 1.0    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Let's Go Pikachu / Eevee       | English (4 builds)         |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
+| Clover                         | 1.3.3                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ◐   |
+| Elysium (Part A)               | 2.5.0                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ◐   |
+| Elysium (Part B)               | 2.5.0                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ◐   |
 | Sword and Shield Ultimate Plus | 1.2.1.2 + its 3 patches    |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | GS Chronicles                  | 2.7.6                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
+| Rhythm                         | 1.4.0                      |  ✅   | ✅  |   ◐    | ✅  |   —    |   —   |
+| Oops All Eevees!               | 1.3.2                      |  ✅   | ✅  |   ◐    | ✅  |   —    |   —   |
+| Ceruleum                       | 1.1.1                      |  ✅   | ✅  |   ◐    | ◐  |   —    |   —   |
+| RecordKeepers                  | 1.2.1                      |  ✅   | ✅  |   ◐    | ◐  |   —    |   —   |
 | Recharged Yellow               | 1.8.0, 1.9.0, 1.9.4, 1.9.7 |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Emerald Legacy                 | 1.1.4                      |  ✅   | ✅  |   ◐    | ✅  |   ✅    |  ✅   |
 | Lazarus                        | 2.0                        |  ✅   | ✅  |   ◐    | ✅  |   ✅    |   ◐   |
@@ -272,7 +296,7 @@ when it isn't sure. Map ◐ means place names only,
 without the map picture. Guide ◐ means the live pages only (the wild encounters here and the next boss). Battle ◐
 means the battle panes work but haven't been checked in every kind of battle. On the DS, HeartGold's and SoulSilver's
 battles aren't read yet. Origin HeartGold's battle system is its own: the battle panes read it, but their buttons
-can't press its menus, and it has no guide yet. Heartfelt Gold reads as HeartGold with its own species, moves, items and type chart, and has no guide yet. Renegade Platinum reads as Platinum with its own types (Fairy among them),
+can't press its menus, and it has no guide yet. Heartfelt Gold reads as HeartGold with its own species, moves, items and type chart, and has no guide yet. Sacred Gold and Storm Silver read as HeartGold and SoulSilver with their own species' types and moves, and no guide yet. Renegade Platinum reads as Platinum with its own types (Fairy among them),
 moves and type chart; its trainers and wild Pokémon are its own, so it has no guide yet. Blaze Black 2 Redux and Volt White 2 Redux read the same way, as Black 2 and White 2 with their own types, moves, type chart and machines, and no guide yet. Team Rocket Dragonsden is DragonsdenTV's Team Rocket Edition, not FireRed Rocket Edition.
 FireRed (rev 0 and 1) and Emerald randomized with Universal Pokemon Randomizer ZX 4.6.1 work with any settings and
 seed: the companion reads the randomized types, moves, teams, wild Pokémon and items from the ROM, and the guide leaves

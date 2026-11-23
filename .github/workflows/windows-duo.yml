@@ -1,0 +1,133 @@
+name: Windows Duo
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/windows-dual-window-v2
+    paths:
+      - '.github/workflows/windows-duo.yml'
+      - 'linux/**'
+      - 'windows/**'
+      - 'libretro/**'
+      - '3ds/core/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-duo:
+    name: Build Windows Duo (x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install MSYS2 and MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            unzip
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-zlib
+
+      - name: Build GB/GBC libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S libretro -B build/win-gbc -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-gbc --target pokedaisy_gbc_libretro -j 4
+
+      - name: Build GBA libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S libretro/armgba -B build/win-gba -DCMAKE_BUILD_TYPE=Release -DARMGBA_JIT=OFF
+          cmake --build build/win-gba --target pokedaisy_gba_libretro -j 4
+
+      - name: Build DS libretro core
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S windows/ds-core -B build/win-ds -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-ds -j 4
+
+      - name: Build Windows Duo host
+        shell: msys2 {0}
+        run: |
+          cmake -G "MinGW Makefiles" -S windows -B build/win-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/win-host -j 4
+
+      - name: Package Windows Duo
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/PokeDaisy-Windows-Duo
+          cp build/win-host/PokeDaisy.exe dist/PokeDaisy-Windows-Duo/
+          cp /mingw64/bin/SDL2.dll dist/PokeDaisy-Windows-Duo/
+          for dll in pokedaisy_gbc_libretro.dll pokedaisy_gba_libretro.dll pokedaisy_ds_libretro.dll; do
+            found=$(find build/win-gbc build/win-gba build/win-ds -type f -name "$dll" -print -quit)
+            if [ -z "$found" ]; then
+              echo "Missing required core: $dll" >&2
+              exit 1
+            fi
+            cp "$found" dist/PokeDaisy-Windows-Duo/
+          done
+          # Resolve transitive dependencies of the host and every core, including
+          # libwinpthread, libgcc, libstdc++, zlib, etc., not just SDL2 itself.
+          # Windows system DLLs are provided by Windows, not bundled.
+          package=dist/PokeDaisy-Windows-Duo
+          declare -A scanned=()
+          shopt -s nocasematch
+          while :; do
+            progress=0
+            for binary in "$package"/*.exe "$package"/*.dll; do
+              [ -f "$binary" ] || continue
+              key="${binary,,}"
+              [ -z "${scanned[$key]+x}" ] || continue
+              scanned[$key]=1
+              progress=1
+              while IFS= read -r dependency; do
+                dependency=$(printf '%s' "$dependency" | tr -d '\015')
+                [ -n "$dependency" ] || continue
+                case "${dependency,,}" in
+                  api-ms-win-*|ext-ms-win-*|kernel32.dll|user32.dll|gdi32.dll|advapi32.dll|ole32.dll|oleaut32.dll|shell32.dll|shlwapi.dll|ws2_32.dll|winmm.dll|imm32.dll|version.dll|setupapi.dll|bcrypt.dll|crypt32.dll|comdlg32.dll|comctl32.dll|dbghelp.dll|dinput8.dll|dxgi.dll|d3d9.dll|d3d11.dll|opengl32.dll|glu32.dll|rpcrt4.dll|secur32.dll|ntdll.dll|msvcrt.dll|ucrtbase.dll|cfgmgr32.dll|hid.dll|iphlpapi.dll|winspool.drv|normaliz.dll|powrprof.dll|propsys.dll|userenv.dll|wldap32.dll|windowscodecs.dll|winhttp.dll|wininet.dll|uxtheme.dll|dwmapi.dll|dwrite.dll|d2d1.dll|msimg32.dll)
+                    continue ;;
+                esac
+                if find "$package" -maxdepth 1 -iname "$dependency" -print -quit | grep -q .; then
+                  continue
+                fi
+                source=$(find /mingw64/bin -maxdepth 1 -iname "$dependency" -print -quit)
+                if [ -z "$source" ]; then
+                  echo "::error::Unresolved DLL $dependency required by $binary" >&2
+                  exit 1
+                fi
+                echo "Bundling dependency: $dependency (required by $(basename "$binary"))"
+                cp "$source" "$package/"
+              done < <(objdump -p "$binary" | sed -n 's/^[[:space:]]*DLL Name: //p')
+            done
+            [ "$progress" -eq 1 ] || break
+          done
+          # Show precisely what users receive in the portable build.
+          echo "Windows Duo package contents:"
+          ls -lh "$package"
+          cd dist
+          zip -r PokeDaisy-Windows-Duo-x64.zip PokeDaisy-Windows-Duo
+
+      - name: Upload Windows Duo ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: PokeDaisy-Windows-Duo-x64
+          path: dist/PokeDaisy-Windows-Duo-x64.zip
+          if-no-files-found: error
+          retention-days: 14

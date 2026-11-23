@@ -7,6 +7,9 @@
 #include <GPU.h>
 #include <GPU3D.h>
 #include <GPU3D_Soft.h>
+#ifdef PK_NDS_BANANADS
+#include <GPU_Soft.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -20,7 +23,28 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+// windows.h's old segmented-memory leftovers (near / far) and wingdi.h's GDI Polygon, all empty macros:
+// this file has a polygon type, a near() of two colours and a far count.
+#undef Polygon
+#undef near
+#undef far
+#endif
+
 using namespace melonDS;
+
+// Built twice: here against the app's melonDS (1.1), and into libpkbananads.so against BananaDS's (PK_NDS_BANANADS,
+// bananads/CMakeLists.txt), whose 2D units are GPU2D itself, whose master brightness sits in GPU and whose software 3D
+// renderer is SoftRenderer3D (a part of the software renderer, which it is handed; it never reads it).
+#ifdef PK_NDS_BANANADS
+using Unit2D = GPU2D;
+using Soft3D = SoftRenderer3D;
+static u16 masterBrightnessA(const GPU& gpu) { return gpu.MasterBrightnessA; }
+#else
+using Unit2D = GPU2D::Unit;
+using Soft3D = SoftRenderer;
+static u16 masterBrightnessA(const GPU& gpu) { return gpu.GPU2D_A.MasterBrightness; }
+#endif
 
 namespace {
 
@@ -76,21 +100,25 @@ struct Slice {
     int sx = 0, sy = 0;   // -1 / 0 / 1: left / screen / right, above / screen / below
     bool active = false;  // gets polygons and is drawn (the window reaches it)
     std::vector<Vertex> verts[2];
-    std::vector<Polygon> polys[2];
+    std::vector<melonDS::Polygon> polys[2];
     int bank = 0;
     u32 numVerts = 0, numPolys = 0, numOpaque = 0;
-    std::array<Polygon*, MAX_POLYS> render {};
+    std::array<melonDS::Polygon*, MAX_POLYS> render {};
     u32 renderNum = 0;
     int x0 = 0, x1 = 0, y0 = 0, y1 = 0;   // what the drawing under way draws (sliceRect when it was handed out)
     Image image;   // drawn after the last frame: what the next composed frame shows
     Image shown;   // what the last composed frame used (pk_nds_wide_check)
     int lastCount = 0;
+    // pk_nds_wide_hires: the slice at the hires renderer's scale too ((W3D * S) x (H3D * S), the 3D engine's colours),
+    // drawn and shown with [image] / [shown]
+    std::vector<u32> hi, hiShown;
+    bool hiValid = false, hiShownValid = false;
 };
 
 // A renderer of its own and its scratch: one per helper thread.
 struct Drawer {
-    std::unique_ptr<SoftRenderer> renderer;
-    std::vector<Polygon*> visible;   // a slice's polygons that reach what it draws
+    std::unique_ptr<Soft3D> renderer;
+    std::vector<melonDS::Polygon*> visible;   // a slice's polygons that reach what it draws
 };
 
 // The helper threads: each frame's slices go into [jobs] and every helper takes the next one until none are left, while
@@ -110,9 +138,15 @@ struct Pool {
 struct Wide {
     NDS* nds = nullptr;
     bool on = false;
-    Slice slices[9];      // (sy + 1) * 3 + sx + 1; 4, the screen itself, unused
+    Slice slices[15];     // (sy + 1) * 5 + sx + 2; 7, the screen itself, unused. sx in [-2, 2]: two screens each side
     Drawer drawers[HELPERS];
     Pool pool;
+    // pk_nds_wide_hires: the margins at a renderer's scale (BananaDS: Gengis) - the slices also drawn by [hiDraw], the
+    // margins composed as a plan (GPU mode's) for the caller to put the hires 3D into
+    int hiScale = 1;
+    PkNdsHiresDraw hiDraw = nullptr;
+    void* hiUser = nullptr;
+    bool planOnly = false;
     std::vector<u32> out;   // OW x OH, the game frame's (0, 0) at (MX, MY)
     int cx0 = 0, cx1 = 0, cy0 = 0, cy1 = 0;   // what the last composed frame covers, in the game frame's pixels
     // The sprites last frame, by what they are (tiles, palette, shape, size, x - not y, nor their OAM slot, which the
@@ -138,10 +172,10 @@ struct Wide {
     bool gpuComplete = true;     // ... all of them (one it couldn't take: the game's own list is drawn instead)
     int gpuL = 0, gpuR = 0, gpuT = 0, gpuB = 0;   // the margins it's built for
     std::vector<Vertex> gpuVerts[2];
-    std::vector<Polygon> gpuPolys[2];
+    std::vector<melonDS::Polygon> gpuPolys[2];
     int gpuBank = 0;
     u32 gpuNumVerts = 0, gpuNumPolys = 0, gpuNumOpaque = 0;
-    std::vector<Polygon*> gpuRender;
+    std::vector<melonDS::Polygon*> gpuRender;
     WidePolygonList gpuList;
     PkNdsWidePlan plan;
 };
@@ -155,6 +189,7 @@ struct Shown2D {
     u32 DispCnt = 0;
     u16 BGCnt[4] = {}, BGXPos[4] = {}, BGYPos[4] = {};
     u8 WinCnt[4] = {};
+    u8 Win0Coords[4] = {}, Win1Coords[4] = {};   // x1, x2, y1, y2 (melonDS's order)
     u16 BlendCnt = 0;
     u8 EVA = 0, EVB = 0, EVY = 0;
     u16 MasterBrightness = 0;
@@ -166,25 +201,37 @@ Shown2D shown2D;
 
 void takeShown2D(Shown2D& d, const GPU& gpu)
 {
-    const GPU2D::Unit& u = gpu.GPU2D_A;
+    const Unit2D& u = gpu.GPU2D_A;
     d.DispCnt = u.DispCnt;
     for (int i = 0; i < 4; i++) {
         d.BGCnt[i] = u.BGCnt[i];
         d.BGXPos[i] = u.BGXPos[i];
         d.BGYPos[i] = u.BGYPos[i];
         d.WinCnt[i] = u.WinCnt[i];
+        d.Win0Coords[i] = u.Win0Coords[i];
+        d.Win1Coords[i] = u.Win1Coords[i];
     }
     d.BlendCnt = u.BlendCnt;
     d.EVA = u.EVA;
     d.EVB = u.EVB;
     d.EVY = u.EVY;
-    d.MasterBrightness = u.MasterBrightness;
+    d.MasterBrightness = masterBrightnessA(gpu);
     std::memcpy(d.Palette, gpu.Palette, sizeof(d.Palette));
     std::memcpy(d.OAM, gpu.OAM, sizeof(d.OAM));
     d.valid = true;
 }
 
 void waitSlices();
+
+void drawSliceHires(Slice& s, Drawer& d)
+{
+    s.hiValid = false;
+    if (!wide.hiDraw || wide.hiScale < 2) return;
+    const size_t n = (size_t) W3D * wide.hiScale * H3D * wide.hiScale;
+    if (s.hi.size() != n) s.hi.assign(n, 0);
+    const int slot = (int) (&s - wide.slices);
+    s.hiValid = wide.hiDraw(wide.hiUser, slot, d.visible.data(), (int) d.visible.size(), s.hi.data());
+}
 
 // Line 192: VBlank is next, which latches the 3D registers the slices still being drawn read (waitSlices).
 void onVisibleEnd(GPU& gpu, void*)
@@ -200,12 +247,12 @@ const Shown2D& shown(const NDS* nds)
     return shown2D;
 }
 
-inline Slice& sliceAt(int sx, int sy) { return wide.slices[(sy + 1) * 3 + sx + 1]; }
+inline Slice& sliceAt(int sx, int sy) { return wide.slices[(sy + 1) * 5 + sx + 2]; }
 
 // Where a polygon goes: a slice's lists, or GPU mode's.
 struct Store {
     Vertex* verts;
-    Polygon* polys;
+    melonDS::Polygon* polys;
     u32& numVerts;
     u32& numPolys;
     u32& numOpaque;
@@ -276,7 +323,7 @@ void storePolygon(GPU3D& g, const Store& st, Vertex* cv, int nverts, bool facing
         if (zerodot && allbehind) return;
     }
 
-    Polygon* poly = &st.polys[st.numPolys++];
+    melonDS::Polygon* poly = &st.polys[st.numPolys++];
     poly->NumVertices = 0;
     poly->Attr = g.CurPolygonAttr;
     poly->TexParam = g.TexParam;
@@ -518,17 +565,17 @@ void swapGpu(GPU3D& g, bool rendering)
         WidePolygonList& list = wide.gpuList;
         list.Active = wide.gpuBuilding && wide.gpuComplete;
         if (list.Active) {
-            Polygon* polys = wide.gpuPolys[wide.gpuBank].data();
+            melonDS::Polygon* polys = wide.gpuPolys[wide.gpuBank].data();
             wide.gpuRender.resize(wide.gpuNumPolys);
             u32 io = 0, it = wide.gpuNumOpaque;
             for (u32 i = 0; i < wide.gpuNumPolys; i++) {
-                Polygon* poly = &polys[i];
+                melonDS::Polygon* poly = &polys[i];
                 if (poly->Translucent) wide.gpuRender[it++] = poly;
                 else wide.gpuRender[io++] = poly;
             }
             std::stable_sort(wide.gpuRender.begin(),
                 wide.gpuRender.begin() + ((g.FlushAttributes & 0x1) ? wide.gpuNumOpaque : wide.gpuNumPolys),
-                [](Polygon* a, Polygon* b) { return a->SortKey < b->SortKey; });
+                [](melonDS::Polygon* a, melonDS::Polygon* b) { return a->SortKey < b->SortKey; });
             list.Polygons = wide.gpuRender.data();
             list.NumPolygons = (int) wide.gpuNumPolys;
             list.ViewW = W3D + wide.gpuL + wide.gpuR;
@@ -576,12 +623,12 @@ void onSwap(GPU3D& g, bool rendering, void*)
         if (rendering) {
             u32 io = 0, it = s.numOpaque;
             for (u32 i = 0; i < s.numPolys; i++) {
-                Polygon* poly = &s.polys[s.bank][i];
+                melonDS::Polygon* poly = &s.polys[s.bank][i];
                 if (poly->Translucent) s.render[it++] = poly;
                 else s.render[io++] = poly;
             }
             std::stable_sort(s.render.begin(), s.render.begin() + ((g.FlushAttributes & 0x1) ? s.numOpaque : s.numPolys),
-                [](Polygon* a, Polygon* b) { return a->SortKey < b->SortKey; });
+                [](melonDS::Polygon* a, melonDS::Polygon* b) { return a->SortKey < b->SortKey; });
             s.renderNum = s.numPolys;
             s.lastCount = (int) s.numPolys;
         }
@@ -855,6 +902,49 @@ inline bool objOpaque(NDS* nds, u16 a0, u16 a1, u16 a2, int w, int h, int px, in
     return objPixel(nds, a0, a1, a2, w, h, px, py) != 0;
 }
 
+// Whether engine A's BG [bg] shows at screen pixel ([x], [y]) through the windows (DISPCNT bits 13-15, WININ / WINOUT):
+// WIN0, then WIN1, then the OBJ window (a sprite in OBJ-window mode with a pixel there; an affine one counts over its
+// whole box), else outside. A Gen 4 battle's stat-change effect shows its pattern layer (BG2, covering the screen) only
+// through the OBJ window, the Pokemon's shape: at the screen's sides it isn't seen, so it mustn't carry them.
+bool bgThroughWindows(NDS* nds, const Shown2D& u, int bg, int x, int y)
+{
+    u32 d = u.DispCnt;
+    if (!(d & 0xE000)) return true;
+    auto inside = [&](const u8* c) {
+        bool inX = c[0] <= c[1] ? x >= c[0] && x < c[1] : x >= c[0] || x < c[1];
+        bool inY = c[2] <= c[3] ? y >= c[2] && y < c[3] : y >= c[2] || y < c[3];
+        return inX && inY;
+    };
+    auto objWindow = [&]() {
+        if (!(d & (1 << 12))) return false;
+        static const int sizes[3][4][2] = {
+            {{8, 8}, {16, 16}, {32, 32}, {64, 64}}, {{16, 8}, {32, 8}, {32, 16}, {64, 32}}, {{8, 16}, {8, 32}, {16, 32}, {32, 64}},
+        };
+        for (int i = 0; i < 128; i++) {
+            const u8* o = &u.OAM[i * 8];
+            u16 a0 = (u16) (o[0] | o[1] << 8), a1 = (u16) (o[2] | o[3] << 8), a2 = (u16) (o[4] | o[5] << 8);
+            if (((a0 >> 10) & 3) != 2) continue;               // not an OBJ-window sprite
+            if (!(a0 & 0x100) && (a0 & 0x200)) continue;        // hidden
+            int shape = (a0 >> 14) & 3;
+            if (shape == 3) continue;
+            int w = sizes[shape][(a1 >> 14) & 3][0], h = sizes[shape][(a1 >> 14) & 3][1];
+            if ((a0 & 0x300) == 0x300) { w *= 2; h *= 2; }
+            int ox = a1 & 0x1FF, oy = a0 & 0xFF;
+            if (ox >= 256) ox -= 512;
+            if (oy >= 192) oy -= 256;
+            if (x < ox || x >= ox + w || y < oy || y >= oy + h) continue;
+            if (objPixel(nds, a0, a1, a2, w, h, x - ox, y - oy)) return true;
+        }
+        return false;
+    };
+    u8 mask;
+    if ((d & 0x2000) && inside(u.Win0Coords)) mask = u.WinCnt[0];
+    else if ((d & 0x4000) && inside(u.Win1Coords)) mask = u.WinCnt[1];
+    else if ((d & 0x8000) && objWindow()) mask = u.WinCnt[3];
+    else mask = u.WinCnt[2];
+    return (mask >> bg) & 1;
+}
+
 // Wide-frame pixel (x, y) as the screen would show it, its 3D colour [c] (NONE / alpha 0: the 3D clear there), as RGBA.
 inline u32 composed(Compose& k, int x, int y, u32 c)
 {
@@ -885,7 +975,8 @@ inline u32 at(int sx, int sy, int x, int y) { return at(sliceAt(sx, sy).image, s
 // two pixels come from the corner slice beside them, which has them inside.
 inline u32 marginPixel(int x, int y)
 {
-    int sx = x < 0 ? -1 : x >= W3D ? 1 : 0, sy = y < 0 ? -1 : y >= H3D ? 1 : 0;
+    int sx = x < -(W3D - OVERLAP) ? -2 : x < 0 ? -1 : x >= W3D + (W3D - OVERLAP) ? 2 : x >= W3D ? 1 : 0,
+        sy = y < 0 ? -1 : y >= H3D ? 1 : 0;
     if (sx == 0) {
         int ax = x < SPARE ? -1 : x >= W3D - SPARE ? 1 : 0;
         if (ax) {
@@ -903,20 +994,22 @@ inline u32 marginPixel(int x, int y)
 }
 
 // The rectangle slice (sx, sy) draws, in the screen's pixels: the margin the window needs on its side(s), SPARE more,
-// and its overlap with the screen.
+// and its overlap with the screen. A slice two screens out covers the second ring: its image reaches from two screens
+// less the overlap to the same three screens in (one screen further than the first ring's, less the overlap again).
 void sliceRect(int sx, int sy, int* x0, int* x1, int* y0, int* y1)
 {
-    *x0 = sx < 0 ? -(wide.needL + SPARE) : sx == 0 ? 0 : W3D - OVERLAP;
-    *x1 = sx < 0 ? OVERLAP : sx == 0 ? W3D : W3D + wide.needR + SPARE;
-    *y0 = sy < 0 ? -(wide.needT + SPARE) : sy == 0 ? 0 : H3D - OVERLAP;
-    *y1 = sy < 0 ? OVERLAP : sy == 0 ? H3D : H3D + wide.needB + SPARE;
+    const int ox = sx * (W3D - OVERLAP), oy = sy * (H3D - OVERLAP);
+    *x0 = sx < 0 ? std::max(-(wide.needL + SPARE), ox) : sx == 0 ? 0 : std::max(W3D - OVERLAP, ox);
+    *x1 = sx < 0 ? std::min(OVERLAP, ox + W3D) : sx == 0 ? W3D : std::min(W3D + wide.needR + SPARE, ox + W3D);
+    *y0 = sy < 0 ? std::max(-(wide.needT + SPARE), oy) : sy == 0 ? 0 : std::max(H3D - OVERLAP, oy);
+    *y1 = sy < 0 ? std::min(OVERLAP, oy + H3D) : sy == 0 ? H3D : std::min(H3D + wide.needB + SPARE, oy + H3D);
 }
 
 void drawSlice(Slice& s, Drawer& d)
 {
     int x0 = s.x0, x1 = s.x1, y0 = s.y0, y1 = s.y1;
     int ox = s.sx * (W3D - OVERLAP), oy = s.sy * (H3D - OVERLAP);   // screen pixel = slice pixel + (ox, oy)
-    SoftRenderer& r = *d.renderer;
+    Soft3D& r = *d.renderer;
     r.ColumnMin = std::clamp(x0 - ox, 0, W3D);
     r.ColumnMax = std::clamp(x1 - ox, 0, W3D);
     r.RowMin = std::clamp(y0 - oy, 0, H3D);
@@ -924,7 +1017,7 @@ void drawSlice(Slice& s, Drawer& d)
     // Polygons wholly outside those cost their per-line set-up all the same: left out (the order kept).
     d.visible.clear();
     for (u32 i = 0; i < s.renderNum; i++) {
-        Polygon* p = s.render[i];
+        melonDS::Polygon* p = s.render[i];
         if (p->YBottom < r.RowMin || p->YTop >= r.RowMax) continue;
         s32 lo = 512, hi = -1;
         for (u32 v = 0; v < p->NumVertices; v++) {
@@ -941,7 +1034,10 @@ void drawSlice(Slice& s, Drawer& d)
     s.image.y0 = r.RowMin + oy;
     s.image.y1 = r.RowMax + oy;
     s.image.valid = true;
+    drawSliceHires(s, d);
 }
+
+void drawSliceHires(Slice& s, Drawer& d);
 
 void takeJobs(Drawer& d)
 {
@@ -1042,10 +1138,10 @@ void pk_nds_wide_set(NDS* nds, bool on)
     wide.gpuList = WidePolygonList();
     wide.gpuBuilding = false;
     wide.plan = PkNdsWidePlan();
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 15; i++) {
         wide.slices[i] = Slice();
-        wide.slices[i].sx = i % 3 - 1;
-        wide.slices[i].sy = i / 3 - 1;
+        wide.slices[i].sx = i % 5 - 2;
+        wide.slices[i].sy = i / 5 - 1;
     }
     wide.cx0 = wide.cx1 = wide.cy0 = wide.cy1 = 0;
     stopPool();
@@ -1056,8 +1152,13 @@ void pk_nds_wide_set(NDS* nds, bool on)
         return;
     }
     for (Drawer& d : wide.drawers) {
+#ifdef PK_NDS_BANANADS
+        d.renderer = std::make_unique<SoftRenderer3D>(nds->GPU.GPU3D, static_cast<SoftRenderer&>(nds->GetRenderer()));
+        d.renderer->Reset();
+#else
         d.renderer = std::make_unique<SoftRenderer>();
         d.renderer->Reset(nds->GPU);
+#endif
     }
     for (int i = 0; i < HELPERS; i++) wide.pool.threads.emplace_back(helperLoop, i);
     wide.out.assign((size_t) OW * OH, 0xFF000000u);
@@ -1093,7 +1194,7 @@ void pk_nds_wide_gpu_want(bool threeD) { wide.gpuWant = threeD; }
 
 void pk_nds_wide_plan(PkNdsWidePlan* out)
 {
-    *out = wide.on && wide.gpu ? wide.plan : PkNdsWidePlan();
+    *out = wide.on && (wide.gpu || wide.planOnly) ? wide.plan : PkNdsWidePlan();
 }
 
 void pk_nds_wide_need(int left, int right, int top, int bottom)
@@ -1119,7 +1220,9 @@ static void applyNeed()
     if (wide.gpu) updateCrop();
     if (!wide.on) return;
     for (Slice& s : wide.slices) {
-        bool x = s.sx < 0 ? wide.needL > 0 : s.sx > 0 ? wide.needR > 0 : true;
+        // A slice out on the second ring draws only once the window needs past the first ring's screen.
+        bool x = s.sx < 0 ? wide.needL > (-s.sx - 1) * (W3D - OVERLAP) :
+                 s.sx > 0 ? wide.needR > (s.sx - 1) * (W3D - OVERLAP) : true;
         bool y = s.sy < 0 ? wide.needT > 0 : s.sy > 0 ? wide.needB > 0 : true;
         s.active = (s.sx || s.sy) && x && y && !wide.gpu;
         if (s.active && s.verts[0].empty()) {
@@ -1136,6 +1239,8 @@ static void applyNeed()
 bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, bool drawNext, bool battle)
 {
     if (!wide.on || nds != wide.nds || !top) return false;
+    // GPU mode's plan instead of the margins' colours: for the GL compositor, or the hires slices' (pk_nds_wide_hires)
+    const bool planning = wide.gpu || wide.planOnly;
     waitSlices();
     int step = 1 + wide.undrawn;
     wide.undrawn = draw ? 0 : std::min(wide.undrawn + 1, 255);
@@ -1180,6 +1285,10 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
             for (int y = 0; y < H3D; y++) {
                 u16 cl = pk_nds_bg_pixel(nds, bg, unitA.BGXPos[bg], y + unitA.BGYPos[bg]);
                 u16 cr = pk_nds_bg_pixel(nds, bg, W3D - 1 + unitA.BGXPos[bg], y + unitA.BGYPos[bg]);
+                // Only where the windows let the layer show (a move's effect layer seen through the Pokemon alone
+                // smeared every row's edge pixel across the margins).
+                if (cl && !bgThroughWindows(nds, unitA, bg, 0, y)) cl = 0;
+                if (cr && !bgThroughWindows(nds, unitA, bg, W3D - 1, y)) cr = 0;
                 // A row the layer covers from edge to edge (HG/SS's "look at the touch screen" bar under the field
                 // menu) carries on too; a text box stops short of the edges.
                 bool across = cl && cr;
@@ -1362,15 +1471,15 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
         wide.cy1 = H3D + wide.needB;
         for (int y = wide.cy0; y < wide.cy1; y++) {
             u32* row = &wide.out[(size_t) (y + MY) * OW + MX];   // row[x], x from -MX
-            if (y >= 0 && y < H3D && !wide.gpu) {
+            if (y >= 0 && y < H3D && !planning) {
                 const u32* src = top + y * W3D;
                 for (int x = 0; x < W3D; x++) row[x] = toRgba(src[x]);
             }
             // GPU mode: what the compositor does there (pk_nds_wide.h's PK_NDS_PLAN_*) - colours it takes as they are,
             // the screen's own pixels where the margin repeats them, the 3D (and the 2D blended over it) to put together.
-            auto color = [&](u32 rgba) { return wide.gpu ? (rgba & 0xFFFFFFu) | PK_NDS_PLAN_COLOR << 24 : rgba; };
+            auto color = [&](u32 rgba) { return planning ? (rgba & 0xFFFFFFu) | PK_NDS_PLAN_COLOR << 24 : rgba; };
             auto screen = [&](int sx, int sy) {
-                if (!wide.gpu) return toRgba(top[sy * W3D + sx]);
+                if (!planning) return toRgba(top[sy * W3D + sx]);
                 return PK_NDS_PLAN_SCREEN << 24 | (u32) (sx & 0xFF) | (u32) sy << 8 | (u32) (sx >> 8) << 16;
             };
             auto margin = [&](int x) {
@@ -1401,12 +1510,12 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
                         int k = std::min(y - runTop[side][y], runBottom[side][y] - y);   // rows from the box's top / bottom
                         int end = BOX_RUN + t - (k < 2 ? BOX_CORNER[k] : 0);
                         if (d <= end - t) {
-                            row[x] = wide.gpu ? screen(side ? W3D - 1 : 0, carryRow[side][y]) : carry[side][y];
+                            row[x] = planning ? screen(side ? W3D - 1 : 0, carryRow[side][y]) : carry[side][y];
                             return;
                         }
                         if (d <= end) {
                             int r0 = runTop[side][y];
-                            row[x] = wide.gpu ? screen(side ? W3D - 1 : 0, carryRow[side][r0]) : carry[side][r0];
+                            row[x] = planning ? screen(side ? W3D - 1 : 0, carryRow[side][r0]) : carry[side][r0];
                             return;
                         }
                         // Past the box's end: the scene, as anywhere else in the margin.
@@ -1423,7 +1532,7 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
                     }
                     if (battle3D) {
                         // The 3D's alpha onto what's under it where BLDCNT has that (the sprite, BG3) as the second target
-                        if (wide.gpu) {
+                        if (planning) {
                             row[x] = PK_NDS_PLAN_3D_ON << 24 | (objUnder ? PK_NDS_PLAN_UNDER_OBJ : 0) | under;
                             return;
                         }
@@ -1437,7 +1546,7 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
                     row[x] = color(shade(under, mb));
                     return;
                 }
-                if (threeDOnTop && wide.gpu) {
+                if (threeDOnTop && planning) {
                     u16 o = compose.count ? overlayPixel(compose, x, y) : 0;
                     row[x] = o ? PK_NDS_PLAN_3D_OVER << 24 | widen(o) : PK_NDS_PLAN_3D << 24;
                     return;
@@ -1452,7 +1561,7 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
         // The frame's outer rows and columns: the DS outlines polygons where the screen cuts them (edge marking), a
         // dark line once the picture goes on past them. Taken from the slice beside them instead - where the next one
         // in shows the slice's own pixel, so it's the 3D layer there and not a text box or a sprite over it.
-        if (threeDOnTop && !wide.gpu) {
+        if (threeDOnTop && !planning) {
             // The edge-marking colours as they come out on screen (ScanlineFinalPass's 5 -> 6 bit conversion): a frame
             // edge pixel showing one of them exactly is the outline. Where the slice shows texture a texel off, the
             // "next one in" test below fails on a busy texture, and the outline stayed as a dark dot.
@@ -1489,7 +1598,7 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
                 }
         }
     }
-    if (draw && wide.gpu) {
+    if (draw && planning) {
         PkNdsWidePlan& p = wide.plan;
         p.valid = true;
         p.px = &wide.out[(size_t) MY * OW + MX];
@@ -1513,6 +1622,9 @@ bool pk_nds_wide_frame(NDS* nds, const uint32_t* top, bool draw, bool margins, b
         if (s.verts[0].empty()) continue;
         std::swap(s.shown, s.image);   // the one just shown (pk_nds_wide_check); the other is drawn over
         s.image.valid = false;
+        std::swap(s.hi, s.hiShown);
+        s.hiShownValid = s.hiValid;
+        s.hiValid = false;
         if (drawNext && s.active) wide.pool.jobs.push_back(&s);
     }
     drawSlices();
@@ -1639,3 +1751,20 @@ void pk_nds_wide_counts(int out[8])
         if (i != 4) out[n++] = wide.slices[i].lastCount;
 }
 
+
+void pk_nds_wide_hires(int scale, PkNdsHiresDraw draw, void* user)
+{
+    waitSlices();
+    wide.hiScale = scale;
+    wide.hiDraw = draw;
+    wide.hiUser = user;
+    wide.planOnly = scale > 1 && draw;
+    wide.plan = PkNdsWidePlan();
+    for (Slice& sl : wide.slices) sl.hiValid = sl.hiShownValid = false;
+}
+
+const uint32_t* pk_nds_wide_hires_slice(int sx, int sy)
+{
+    const Slice& sl = wide.slices[(sy + 1) * 3 + sx + 1];
+    return wide.planOnly && sl.hiShownValid ? sl.hiShown.data() : nullptr;
+}
