@@ -33,11 +33,10 @@ jobs:
           done
 
   ipa:
-    # Use the GA macOS 26 image as a fallback after repeated xcode-27 runner acquisition failures.
-    # The workflow selects the latest installed stable Xcode at runtime.
-    # The iPhone Duo SDK compatibility check remains below for builds targeting that device.
+    # Use the xcode-27 image that previously produced a successful signed-off IPA.
+    # Keep concurrency cancellation disabled to avoid interrupting diagnostic builds.
     needs: smoke
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
