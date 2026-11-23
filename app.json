@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "PokeDaisy",
+    "slug": "pokedaisy-ios",
+    "version": "0.1.0",
+    "ios": {
+      "bundleIdentifier": "com.pokedaisy.ios"
+    },
+    "extra": {
+      "eas": {}
+    }
+  }
+}
