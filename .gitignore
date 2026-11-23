@@ -45,6 +45,9 @@ google-services.json
 # Gradle / Android build outputs
 .gradle/
 build/
+# EAS custom workflow definitions are source, not generated build output.
+!/.eas/build/
+!/.eas/build/*.yml
 .cxx/
 .kotlin/
 .idea/
