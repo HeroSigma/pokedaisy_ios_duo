@@ -58,6 +58,8 @@ static SDL_Renderer *renderer;
 #ifdef _WIN32
 static SDL_Window *companionWindow = NULL;
 static SDL_Renderer *companionRenderer = NULL;
+static SDL_Texture *companionTexture = NULL;
+static int companionFrameW = 0, companionFrameH = 0;
 static bool companionWindowVisible = false;
 
 static void duo_window_create(void)
@@ -70,7 +72,7 @@ static void duo_window_create(void)
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         480,
-        640,
+        360,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN
     );
 
@@ -104,6 +106,38 @@ static void duo_window_create(void)
     companionWindowVisible = true;
 }
 
+/* Called synchronously from the GBA libretro core, after each gameplay frame.
+ * The companion pixels are only valid until this callback returns. */
+static bool duo_window_frame(const struct pd_companion_frame *frame)
+{
+    if (!companionRenderer)
+        return false;
+    if (!frame || !frame->active)
+        return true; /* Core capability probe. */
+    if (!frame->pixels || frame->width <= 0 || frame->height <= 0)
+        return false;
+
+    if (!companionTexture ||
+        frame->width != companionFrameW ||
+        frame->height != companionFrameH) {
+        if (companionTexture)
+            SDL_DestroyTexture(companionTexture);
+        companionTexture = SDL_CreateTexture(companionRenderer,
+            SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+            frame->width, frame->height);
+        companionFrameW = frame->width;
+        companionFrameH = frame->height;
+        if (companionTexture) {
+            SDL_SetTextureBlendMode(companionTexture, SDL_BLENDMODE_NONE);
+            SDL_SetTextureScaleMode(companionTexture, SDL_ScaleModeNearest);
+        }
+    }
+
+    return companionTexture &&
+        SDL_UpdateTexture(companionTexture, NULL, frame->pixels,
+                          frame->width * (int)sizeof(uint32_t)) == 0;
+}
+
 static void duo_window_present(void)
 {
     if (!companionWindowVisible || !companionRenderer)
@@ -113,11 +147,26 @@ static void duo_window_present(void)
         companionRenderer, 24, 42, 48, 255
     );
     SDL_RenderClear(companionRenderer);
+    if (companionTexture && companionFrameW > 0 && companionFrameH > 0) {
+        int w = 480, h = 360;
+        SDL_GetRendererOutputSize(companionRenderer, &w, &h);
+        const float scale = SDL_min((float)w / companionFrameW,
+                                    (float)h / companionFrameH);
+        SDL_FRect dst = {(w - companionFrameW * scale) * 0.5f,
+                         (h - companionFrameH * scale) * 0.5f,
+                         companionFrameW * scale, companionFrameH * scale};
+        SDL_RenderCopyF(companionRenderer, companionTexture, NULL, &dst);
+    }
     SDL_RenderPresent(companionRenderer);
 }
 
 static void duo_window_destroy(void)
 {
+    if (companionTexture) {
+        SDL_DestroyTexture(companionTexture);
+        companionTexture = NULL;
+    }
+    companionFrameW = companionFrameH = 0;
     if (companionRenderer) {
         SDL_DestroyRenderer(companionRenderer);
         companionRenderer = NULL;
@@ -1171,6 +1220,10 @@ static bool environment(unsigned cmd, void *data) {
   case PD_ENV_SET_FAST_FORWARD:
     ffQuick = data && *(const bool *)data;
     return true;
+#ifdef _WIN32
+  case PD_ENV_SET_COMPANION_FRAME:
+    return duo_window_frame((const struct pd_companion_frame *)data);
+#endif
   case PD_ENV_SET_TOUCH_PANEL: {
     const struct pd_touch_panel *p = data;
     panelPending = p && p->active && p->pixels && p->src_w > 0 && p->src_h > 0 && p->w > 0 && p->h > 0;
