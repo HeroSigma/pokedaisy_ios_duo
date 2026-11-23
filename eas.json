@@ -1,0 +1,11 @@
+{
+  "build": {
+    "sideload": {
+      "distribution": "internal",
+      "withoutCredentials": true,
+      "ios": {
+        "config": "pokedaisy-ios.yml"
+      }
+    }
+  }
+}
