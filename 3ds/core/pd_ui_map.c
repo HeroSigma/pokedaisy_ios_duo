@@ -241,6 +241,39 @@ static void layout(struct pd_canvas* c, const struct pd_map_art* art, int page) 
 void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s,
                 const struct pd_host_info* host) {
     lastGame = g;
+    if (g && strcmp(g->sha1, "552ec33df5b6c31409fee1b8e5346e4a8de83ce9") == 0) {
+        // Phase 1: live telemetry verified against the matching source.
+        // Do not overlay a retail Hoenn map over Legends' custom regions.
+        // Fly/take-off remain disabled until the actual regional tiles and
+        // destination tables have been mapped and tested.
+        const int x = MARGIN, w = c->w - 2 * MARGIN;
+        const int y = CONTENT_Y + 3;
+        int f = pd_title_box(c, x, y, w, 26, PD_TITLE_FILL);
+        pd_text(c, x + f + 8, pd_text_y(y, 26), "LIVE LOCATION", PD_TITLE_TEXT, PD_TITLE_SHADOW);
+        if (!s->posOk) {
+            ui_notice(c, "LOCATION UNAVAILABLE", "Enter the overworld to show", "the current map position.");
+            return;
+        }
+        int iy = y + 34;
+        char line[96];
+        snprintf(line, sizeof line, "MAP SECTION: %d", s->mapsec);
+        pd_text(c, x + 9, iy, line, PD_LABEL, PD_LABEL_SHADOW);
+        iy += 23;
+        snprintf(line, sizeof line, "MAP GROUP: %d   NUMBER: %d", s->mapGroup, s->mapNum);
+        pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
+        iy += 23;
+        snprintf(line, sizeof line, "POSITION: X %d   Y %d", s->x, s->y);
+        pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
+        iy += 23;
+        if (s->mapW > 0 && s->mapH > 0) {
+            snprintf(line, sizeof line, "MAP SIZE: %d x %d", s->mapW, s->mapH);
+            pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
+            iy += 23;
+        }
+        pd_text_fit(c, x + 9, iy + 9, w - 18, "REGION ART: NOT MAPPED", PD_MUTED, PD_MUTED_SHADOW);
+        pd_text_fit(c, x + 9, iy + 25, w - 18, "FLY: DISABLED UNTIL VERIFIED", PD_MUTED, PD_MUTED_SHADOW);
+        return;
+    }
     const struct pd_map_art* art = pd_map_art(g);
     if (!art) {
         ui_notice(c, "NO MAP", "The region map's art wasn't found", "in this ROM.");
