@@ -461,7 +461,8 @@ static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
             }
             const unsigned bit = (id - 1) * 10;
             const unsigned at = bit / 8, shift = bit % 8;
-            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8) |\n                                 ((unsigned)packed[at + 2] << 16);
+            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8) |
+                                 ((unsigned)packed[at + 2] << 16);
             const unsigned qty = (raw >> shift) & 0x03FFu;
             if (qty > 0 && qty <= 999) bag_add(s, outPocket, id, qty);
         }
