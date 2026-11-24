@@ -14,7 +14,7 @@ from pathlib import Path
 EXPECTED = "552ec33df5b6c31409fee1b8e5346e4a8de83ce9"
 SPECIES_INFO = 0x0876A348
 ICON_PALETTES = 0x0862C2F4
-STRIDE = 0xC4  # struct SpeciesInfo /*0xC4*/ in this game source.
+STRIDE = 0xC4  # HeroSigma/Legends-Awakening-Reborn include/pokemon.h (matching codebase).
 BASE = 0x08000000
 
 
@@ -44,6 +44,7 @@ def main():
         sys.exit("STOP: expected symbol addresses fall outside the ROM.")
     print(f"gSpeciesInfo: 0x{SPECIES_INFO:08X}; stride candidate: 0x{STRIDE:X}")
     print(f"gMonIconPalettes: 0x{ICON_PALETTES:08X}")
+    print("Source: HeroSigma/Legends-Awakening-Reborn; ROM: SHA-1 locked.")
     scores = []
     # Check candidate pointer members at the same offset in 160 species records.
     # Front/back graphics and description pointers may also score, so these
