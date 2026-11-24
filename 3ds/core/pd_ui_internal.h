@@ -39,8 +39,8 @@ enum {
     HIT_SUMMARY_INFO = 302,
     HIT_SUMMARY_LEARN = 303,
     HIT_BAG_TAB = 400,     // + the bag's pocket tab (ALL first)
-    HIT_BAG_LIST = 410,
-    HIT_SETTINGS_LIST = 411, // the SETTINGS list (a drag scrolls it)
+    HIT_BAG_LIST = 430,
+    HIT_SETTINGS_LIST = 431, // the SETTINGS list (a drag scrolls it)
     HIT_BAG_USE = 490,
     HIT_BAG_GIVE = 491,
     HIT_ITEM_CANCEL = 492,
