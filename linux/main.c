@@ -2441,7 +2441,7 @@ static int libraryTopW, libraryTopH;
 /* The same viewport library_present draws: window pixels, the scale, the canvas and its top-left corner. */
 static void library_viewport(int *ow, int *oh, int *scale, int *w, int *h, int *x0, int *y0) {
   int width = W, height = H;
-  pd_screen_output_size(renderer, &width, &height);
+  SDL_GetRendererOutputSize(renderer, &width, &height);
   int s = width / 560 < height / 400 ? width / 560 : height / 400;
   if (s < 1)
     s = 1;
