@@ -407,6 +407,47 @@ static bool save_key(const struct pd_config* cfg, pd_read_fn read, void* ctx, ui
     return cfg->encryptionKeyOff < 0 || read_u32(read, ctx, sb2 + (uint32_t) cfg->encryptionKeyOff, key);
 }
 
+// Legends Awakening read-only live location. Verified from the matching
+// pokeemerald-expansion structs and ELF: gMapHeader at 0x020027A0,
+// SaveBlock1Ptr at 0x030050E8; SaveBlock1.pos at +0 and
+// SaveBlock1.location.mapGroup/mapNum at +4/+5. MapHeader section is +0x14,
+// map type +0x16, and mapLayout points to width/height at +0/+4.
+// These reads remain separate from the unverified battle/save telemetry.
+static void read_legends_location(struct pd_snapshot* s,
+                                  const struct pd_config* cfg,
+                                  pd_read_fn read, void* ctx) {
+    uint8_t header[0x18] = {0};
+    if (!read(ctx, cfg->mapHeader, header, sizeof header)) return;
+    const unsigned section = header[0x14];
+    const unsigned mapType = header[0x16];
+    if (section == 0xFF || mapType > 31) return;
+    uint32_t sb1 = 0;
+    if (!save_block(cfg, read, ctx, cfg->saveBlock1Ptr, &sb1)) return;
+    uint8_t loc[8] = {0};
+    if (!read(ctx, sb1, loc, sizeof loc)) return;
+    const int x = (int16_t)u16(loc), y = (int16_t)u16(loc + 2);
+    if (x < 0 || y < 0 || x > 16383 || y > 16383) return;
+    s->mapsec = (int)section;
+    s->mapType = (int)mapType;
+    s->x = x;
+    s->y = y;
+    s->mapGroup = (int)(int8_t)loc[4];
+    s->mapNum = (int)(int8_t)loc[5];
+    s->posOk = true;
+    uint32_t layout = u32(header);
+    uint8_t dims[8] = {0};
+    if ((layout >= 0x08000000u && layout < 0x0E000000u) ||
+        (layout >= 0x02000000u && layout < 0x02040000u)) {
+        if (read(ctx, layout, dims, sizeof dims)) {
+            uint32_t w = u32(dims), h = u32(dims + 4);
+            if (w > 0 && w < 2048 && h > 0 && h < 2048) {
+                s->mapW = (int)w;
+                s->mapH = (int)h;
+            }
+        }
+    }
+}
+
 static void bag_add(struct pd_snapshot* s, int pocket, int item, int quantity);
 
 // Read the November 23, 2026 Legends Awakening build's expanded Bag.
@@ -562,8 +603,9 @@ void pd_snapshot_read(struct pd_snapshot* s, const struct pd_game* g, pd_read_fn
     if (legendsPartyOnly) {
         // The expansion's held item has flag bits above its 10-bit ID.
         for (int i = 0; i < s->partyCount; i++) s->party[i].heldItem &= 0x03FF;
-        // Inventory only: battle, map and other save readers remain gated.
+        // Verified Bag and Map reads only. Battle and other save readers gated.
         read_legends_bag(s, cfg, read, ctx);
+        read_legends_location(s, cfg, read, ctx);
         return;
     }
 
