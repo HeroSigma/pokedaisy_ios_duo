@@ -409,48 +409,62 @@ static bool save_key(const struct pd_config* cfg, pd_read_fn read, void* ctx, ui
 
 static void bag_add(struct pd_snapshot* s, int pocket, int item, int quantity);
 
-// Legends Awakening (exact ROM SHA): read-only standard BagPocket decoder.
-// The expansion's BagPocket is 8 bytes: pointer (4), 10-bit capacity and
-// 6-bit pocket ID (2), padding (2). ItemSlot is 4 bytes (u16 ID, u16 qty).
-// This deliberately does not access the game's expanded-bag storage; such
-// pockets must be mapped separately rather than presenting invented data.
+// Read the November 23, 2026 Legends Awakening build's expanded Bag.
+// Source: Legends-Awakening-Reborn/src/expanded_bag.c, matched ELF addresses:
+// sActive 0x020016e4, sBases 0x020016e8, sSlots 0x020016f4,
+// gExpandedBagData 0x02001dcc, gBagPockets 0x020077fc.
+// ITEMS_COUNT=876; item IDs 1..875 have packed, unencrypted 10-bit counts.
+// Active expanded-bag pockets use sSlots/sBases, NOT BagPocket.itemSlots.
 static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
                              pd_read_fn read, void* ctx) {
-    uint32_t sb2 = 0, key = 0;
-    if (!save_block(cfg, read, ctx, cfg->saveBlock2Ptr, &sb2) ||
-        !save_key(cfg, read, ctx, sb2, &key)) return false;
-    enum { LEGENDS_POCKETS = 5, LEGENDS_POCKET_BYTES = 8 };
-    uint8_t desc[LEGENDS_POCKETS * LEGENDS_POCKET_BYTES];
-    if (!read(ctx, cfg->bagPockets, desc, sizeof(desc))) return false;
-    // Validate every descriptor before using any inventory entries.
+    enum { LEGENDS_POCKETS = 5, LEGENDS_ITEMS_COUNT = 876,
+           LEGENDS_MAX_ITEM = LEGENDS_ITEMS_COUNT - 1,
+           LEGENDS_PACKED_BYTES = (LEGENDS_MAX_ITEM * 10 + 7) / 8 };
+    uint8_t active = 0;
+    if (!read(ctx, 0x020016e4u, &active, 1) || active != 1) return false;
+
+    uint8_t bases[LEGENDS_POCKETS * 2];
+    uint8_t desc[LEGENDS_POCKETS * 8];
+    uint8_t packed[LEGENDS_PACKED_BYTES + 1]; // extra byte for final unaligned extraction
+    uint8_t slots[LEGENDS_MAX_ITEM * 2];
+    if (!read(ctx, 0x020016e8u, bases, sizeof bases) ||
+        !read(ctx, cfg->bagPockets, desc, sizeof desc) ||
+        !read(ctx, 0x020016f4u, slots, sizeof slots) ||
+        !read(ctx, 0x02001dccu, packed, LEGENDS_PACKED_BYTES)) return false;
+    packed[LEGENDS_PACKED_BYTES] = 0;
+
+    // Validate the layout before displaying any entries. The item lists in
+    // sSlots are grouped by real game pocket, and their offsets are sBases.
+    unsigned expectedBase = 0;
     for (int p = 0; p < LEGENDS_POCKETS; p++) {
-        const uint8_t* d = desc + p * LEGENDS_POCKET_BYTES;
-        const uint32_t ptr = u32(d);
-        const unsigned cap = u16(d + 4) & 0x03FF;
-        const unsigned pocketId = u16(d + 4) >> 10;
-        if (pocketId != (unsigned) p || !cap || cap > 1023 || !in_ram(ptr)) return false;
+        const uint8_t* d = desc + p * 8;
+        const unsigned cap = u16(d + 4) & 0x03FFu;
+        const unsigned id = u16(d + 4) >> 10;
+        const unsigned base = u16(bases + p * 2);
+        if (id != (unsigned)p || base != expectedBase ||
+            cap > LEGENDS_MAX_ITEM - base) return false;
+        expectedBase += cap;
     }
-    bool allReadable = true;
+    // Walk the game-maintained item list rather than guessing item category.
+    // Quantities come only from gExpandedBagData, 10 bits per item ID.
     for (int p = 0; p < LEGENDS_POCKETS; p++) {
-        const uint8_t* d = desc + p * LEGENDS_POCKET_BYTES;
-        const uint32_t ptr = u32(d);
-        unsigned cap = u16(d + 4) & 0x03FF;
-        // Only collect up to the companion's fixed per-pocket capacity.
-        if (cap > PD_POCKET_SLOTS) cap = PD_POCKET_SLOTS;
-        uint8_t raw[PD_POCKET_SLOTS * 4];
-        if (!read(ctx, ptr, raw, cap * 4)) { allReadable = false; continue; }
+        const unsigned base = u16(bases + p * 2);
+        const unsigned cap = u16(desc + p * 8 + 4) & 0x03FFu;
         const int outPocket = cfg->bagOrder[p];
         if (outPocket < 0 || outPocket >= PD_POCKET_COUNT) return false;
         for (unsigned i = 0; i < cap; i++) {
-            const unsigned id = u16(raw + i * 4);
-            const unsigned qty = u16(raw + i * 4 + 2) ^ (key & 0xFFFF);
-            if (!id || !qty) continue;
-            bag_add(s, outPocket, id, qty);
+            const unsigned id = u16(slots + 2 * (base + i));
+            if (!id) continue;
+            if (id > LEGENDS_MAX_ITEM) {
+                memset(s->bag, 0, sizeof s->bag);
+                return false;
+            }
+            const unsigned bit = (id - 1) * 10;
+            const unsigned at = bit / 8, shift = bit % 8;
+            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8);
+            const unsigned qty = (raw >> shift) & 0x03FFu;
+            if (qty > 0 && qty <= 999) bag_add(s, outPocket, id, qty);
         }
-    }
-    if (!allReadable) {
-        memset(s->bag, 0, sizeof(s->bag));
-        return false;
     }
     s->bagOk = true;
     return true;
