@@ -1,30 +1,24 @@
 #!/usr/bin/env python3
-"""Read-only diagnostics for the exact Legends Awakening November 23 ROM.
+"""Find candidate icon pointers in the SHA-1 locked Legends Awakening ROM.
 
-Find plausible iconSprite member offsets in gSpeciesInfo without assuming
-the pokeemerald-expansion SpeciesInfo layout. Does not change ROM/save data.
-Results are candidates, not proof of an offset.
+Unlike the first version, do NOT assume the source comment /*0xC4*/ is
+the size of the final compiled SpeciesInfo (overworld fields extend it).
+This is read-only diagnostic evidence; not proof of any individual member.
 """
 import hashlib
 import struct
 import sys
-from collections import Counter
 from pathlib import Path
 
 EXPECTED = "552ec33df5b6c31409fee1b8e5346e4a8de83ce9"
 SPECIES_INFO = 0x0876A348
 ICON_PALETTES = 0x0862C2F4
-STRIDE = 0xC4  # HeroSigma/Legends-Awakening-Reborn include/pokemon.h (matching codebase).
 BASE = 0x08000000
+SAMPLES = 128
 
 
-def u32(rom, pos):
-    return struct.unpack_from("<I", rom, pos)[0]
-
-
-def read_ptr(rom, addr, length=512):
-    pos = addr - BASE
-    return pos if BASE <= addr and 0 <= pos <= len(rom) - length else None
+def u32(data, offset):
+    return struct.unpack_from("<I", data, offset)[0]
 
 
 def main():
@@ -36,48 +30,53 @@ def main():
     print(f"ROM: {path.name} ({len(rom):,} bytes)")
     print(f"SHA-1: {digest}")
     if digest != EXPECTED:
-        sys.exit("STOP: wrong ROM build; this diagnostic is SHA-1 locked.")
+        sys.exit("STOP: ROM SHA-1 does not match the known Legends Awakening build.")
 
-    base = read_ptr(rom, SPECIES_INFO, STRIDE * 200)
-    palette = read_ptr(rom, ICON_PALETTES, 6 * 32)
-    if base is None or palette is None:
-        sys.exit("STOP: expected symbol addresses fall outside the ROM.")
-    print(f"gSpeciesInfo: 0x{SPECIES_INFO:08X}; stride candidate: 0x{STRIDE:X}")
+    start = SPECIES_INFO - BASE
+    palette = ICON_PALETTES - BASE
+    if start < 0 or palette < 0 or palette + 192 > len(rom):
+        sys.exit("STOP: symbol addresses outside the ROM.")
+
+    print(f"gSpeciesInfo: 0x{SPECIES_INFO:08X}")
     print(f"gMonIconPalettes: 0x{ICON_PALETTES:08X}")
-    print("Source: HeroSigma/Legends-Awakening-Reborn; ROM: SHA-1 locked.")
-    scores = []
-    # Check candidate pointer members at the same offset in 160 species records.
-    # Front/back graphics and description pointers may also score, so these
-    # rankings must be checked against a separately compiled layout.
-    for off in range(0, STRIDE - 3, 4):
-        good = 0
-        raw_like = 0
-        compressed = 0
-        examples = []
-        unique = set()
-        for species in range(1, 161):
-            ptr = u32(rom, base + species * STRIDE + off)
-            target = read_ptr(rom, ptr)
-            if target is None:
-                continue
-            good += 1
-            unique.add(ptr)
-            payload = rom[target:target + 512]
-            entropy_proxy = len(set(payload))
-            if payload[0] == 0x10:
-                compressed += 1
-            if entropy_proxy >= 28 and any(payload) and payload[0] != 0x10:
-                raw_like += 1
-            if len(examples) < 3:
-                examples.append(f"species {species}=0x{ptr:08X}")
-        if good >= 30:
-            scores.append((raw_like, good, len(unique), -compressed, off, examples))
-    for raw_like, good, unique, neg_compressed, off, examples in sorted(scores, reverse=True)[:12]:
-        print(f"member +0x{off:02X}: valid={good}/160, raw-like={raw_like}, "
-              f"distinct={unique}, compressed={-neg_compressed}; " + ", ".join(examples))
-    print("\nThese are candidate pointer fields, not confirmed iconSprite offsets.")
-    print("Compare against offsetof(struct SpeciesInfo, iconSprite) from the matching build.")
-    print("No files were modified.")
+    print("Scanning possible record strides (0xC4 to 0x400); "
+          "source /*0xC4*/ comment is not necessarily final sizeof.")
+    # With a correct stride, a real iconSprite pointer points at 1024+ bytes of
+    # raw 4bpp tile graphics in nearly every populated species.
+    # A wrong stride yields random pointer-shaped bytes only occasionally.
+    candidates = []
+    for stride in range(0xC4, 0x401, 4):
+        for off in range(0, min(stride, 0x180) - 3, 4):
+            valid = distinct = 0
+            unique = set()
+            first = []
+            for species in range(1, SAMPLES + 1):
+                record = start + species * stride + off
+                if record + 4 > len(rom):
+                    break
+                ptr = u32(rom, record)
+                pos = ptr - BASE
+                if not (0 <= pos <= len(rom) - 1024):
+                    continue
+                valid += 1
+                unique.add(ptr)
+                if len(first) < 3:
+                    first.append(f"{species}:0x{ptr:08X}")
+            distinct = len(unique)
+            if valid >= 90 and distinct >= 65:
+                candidates.append((valid, distinct, stride, off, first))
+
+    candidates.sort(reverse=True)
+    if not candidates:
+        print("No high-confidence pointer field detected. Do not enable icons yet.")
+    for valid, distinct, stride, off, examples in candidates[:14]:
+        print(f"stride=0x{stride:X}, member=+0x{off:X}, valid={valid}/{SAMPLES}, "
+              f"distinct={distinct}, sample={', '.join(examples)}")
+    print("IMPORTANT: Candidate entries may include description, pictures, "
+          "iconSprite, or other pointer members.")
+    print("Confirm with sizeof/offsetof from the exact game build before "
+          "changing PokéDaisy's decoder.")
+    print("No ROM or save data was modified.")
 
 
 if __name__ == "__main__":
