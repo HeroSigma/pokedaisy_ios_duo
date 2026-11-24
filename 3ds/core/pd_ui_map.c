@@ -274,29 +274,29 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
         }
         if (*place) {
             pd_text_fit(c, x + 9, iy, w - 18, place, PD_TITLE_TEXT, PD_TITLE_SHADOW);
-            iy += 23;
+            iy += 18;
         }
         snprintf(line, sizeof line, "MAP SECTION: %d", s->mapsec);
         pd_text(c, x + 9, iy, line, PD_LABEL, PD_LABEL_SHADOW);
-        iy += 23;
+        iy += 18;
         snprintf(line, sizeof line, "MAP GROUP: %d   NUMBER: %d", s->mapGroup, s->mapNum);
         pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-        iy += 23;
+        iy += 18;
         snprintf(line, sizeof line, "POSITION: X %d   Y %d", s->x, s->y);
         pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-        iy += 23;
+        iy += 18;
         if (mw && mh && mw <= 30 && mh <= 20) {
             snprintf(line, sizeof line, "REGION TILE: %u,%u   AREA: %u x %u", mx, my, mw, mh);
             pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-            iy += 23;
+            iy += 18;
         }
         if (s->mapW > 0 && s->mapH > 0) {
             snprintf(line, sizeof line, "MAP SIZE: %d x %d", s->mapW, s->mapH);
             pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-            iy += 23;
+            iy += 18;
         }
         pd_text_fit(c, x + 9, iy + 9, w - 18, "REGION ART: NOT MAPPED", PD_MUTED, PD_MUTED_SHADOW);
-        pd_text_fit(c, x + 9, iy + 25, w - 18, "FLY: DISABLED UNTIL VERIFIED", PD_MUTED, PD_MUTED_SHADOW);
+        pd_text_fit(c, x + 9, iy + 23, w - 18, "FLY: DISABLED UNTIL VERIFIED", PD_MUTED, PD_MUTED_SHADOW);
         return;
     }
     const struct pd_map_art* art = pd_map_art(g);
