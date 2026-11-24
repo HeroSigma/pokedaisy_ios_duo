@@ -129,7 +129,8 @@ final class Emulator: ObservableObject {
         UIDevice.current.isBatteryMonitoringEnabled = true
         updateBattery()
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateBattery() }
+            guard let emulator = self else { return }
+            Task { @MainActor in emulator.updateBattery() }
         }
         audio.start()
         startLink()
