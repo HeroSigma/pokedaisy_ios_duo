@@ -12,6 +12,7 @@
 #include "pd_icon.h"
 #include "pd_tables.h"
 #include "pd_legends_items.h"
+#include "pd_legends_item_descs.h"
 #include "pd_ui_internal.h"
 
 #define TAB_H 22
@@ -179,6 +180,37 @@ static int open_tab(struct pd_canvas* c, const struct pd_bag_palette* p, int x, 
 // The pocket tabs down the left, the open one joined to the list.
 static void tabs(struct pd_ui* ui, struct pd_canvas* c, const struct pd_bag_palette* p, const struct bag_view* v,
                  int x, int w, int bottom, int panelX) {
+    if (v->legends) {
+        // At native 320x240 each tab needs 20px to keep its letters legible.
+        // Show six categories per page, with clearly separated PREV/NEXT.
+        const int rows = 6, tabH = 19, gap = 2, navH = 16;
+        const int maxPage = (v->tabs - 1) / rows;
+        if (ui->bagTabPage < 0) ui->bagTabPage = 0;
+        if (ui->bagTabPage > maxPage) ui->bagTabPage = maxPage;
+        const int first = ui->bagTabPage * rows;
+        int navY = CONTENT_Y;
+        pd_layered_box(c, x, navY, w, navH, 2, p->panel, p->tabLayers, p->panel[p->tabLayers].color);
+        pd_text_fit(c, x + 6, navY + 2, w - 12,
+                    ui->bagTabPage ? "< PREV" : "CATEGORIES", p->tabText, p->tabTextShadow);
+        if (ui->bagTabPage) ui_add_hit(ui, x, navY, w, navH, HIT_BAG_CAT_PREV);
+        for (int i = first; i < first + rows && i < v->tabs; i++) {
+            const int y = navY + navH + gap + (i - first) * (tabH + gap);
+            if (y + tabH > bottom - navH - gap) break;
+            const bool open = i == v->active;
+            const int f = pd_layered_box(c, x, y, w, tabH, 2, p->panel, p->tabLayers, p->panel[p->tabLayers].color);
+            const char* name = i == 0 ? "ALL" : pd_legends_bag_category_names[v->pockets[i]];
+            pd_text_fit(c, x + f + 4, y + 3, w - 2 * f - 8, name, p->tabText, p->tabTextShadow);
+            if (open) pd_fill(c, x + f + 4, y + tabH - 3, w - 2 * f - 8, 2, p->cursor);
+            ui_add_hit(ui, x, y, w, tabH, HIT_BAG_TAB + i);
+        }
+        const int nextY = navY + navH + gap + rows * (tabH + gap);
+        if (nextY + navH <= bottom && ui->bagTabPage < maxPage) {
+            pd_layered_box(c, x, nextY, w, navH, 2, p->panel, p->tabLayers, p->panel[p->tabLayers].color);
+            pd_text_fit(c, x + 6, nextY + 2, w - 12, "NEXT >", p->tabText, p->tabTextShadow);
+            ui_add_hit(ui, x, nextY, w, navH, HIT_BAG_CAT_NEXT);
+        }
+        return;
+    }
     const int tabH = v->legends ? 12 : TAB_H;
     const int gap = v->legends ? 1 : 3;
     int visible = v->legends ? v->tabs :
@@ -280,8 +312,11 @@ static void description(struct pd_ui* ui, struct pd_canvas* c, const struct pd_g
     int f = pd_layered_box(c, x, y, w, h, 3, p->desc, p->descLayers, p->descFill);
     bool use = host && host->itemCanUse && host->itemCanUse(id), give = host && host->itemCanGive && host->itemCanGive(id);
     int bw = 44, room = use || give ? bw + 6 : 0;
-    const char* text = ui->bagSource ? ui->bagSource->name(ui->bagSource->ctx, id) : pd_item_description(g, id);
-    if (!*text) text = pd_item_name(g, id);
+    const char* text = ui->bagSource ? ui->bagSource->name(ui->bagSource->ctx, id) :
+        pd_legends_bag_build(g) ? pd_legends_item_description(id) : pd_item_description(g, id);
+    if (!text || !*text)
+        text = pd_legends_bag_build(g) ? pd_legends_item_name(id) : pd_item_name(g, id);
+    if (!text) text = "";
     int tx = x + f + 6, tw = w - 2 * (f + 6) - room;
     if (pd_draw_item_icon(c, g, id, x + f + 3, y + (h - PD_ITEM_ICON) / 2, false)) {
         tx += PD_ITEM_ICON + 2;
