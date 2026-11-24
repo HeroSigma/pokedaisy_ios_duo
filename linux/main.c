@@ -65,6 +65,8 @@ static bool companionWindowVisible = false;
 static int companionMouseX = -1, companionMouseY = -1;
 static bool companionMouseHeld = false;
 static int companionMousePulse = 0;
+static int companionPressX = -1, companionPressY = -1;
+static bool companionReleaseQueued = false;
 
 static SDL_Rect duo_top_rect(void) {
     int w = 0, h = 0;
@@ -134,9 +136,24 @@ static void duo_mouse_at(int x, int y) {
 }
 static bool duo_window_pointer(struct pd_companion_pointer *p) {
     if (!p) return false;
-    p->x = companionMouseX; p->y = companionMouseY;
-    p->pressed = companionMouseHeld || companionMousePulse > 0;
-    if (companionMousePulse > 0) companionMousePulse--;
+    // SDL may deliver DOWN and UP during the same emulated frame. Deliver
+    // the queued DOWN first, then the release on the next poll; the core
+    // activates companion controls on release.
+    if (companionMousePulse > 0) {
+        p->x = companionPressX;
+        p->y = companionPressY;
+        p->pressed = true;
+        companionMousePulse--;
+    } else if (companionReleaseQueued) {
+        p->x = companionPressX;
+        p->y = companionPressY;
+        p->pressed = false;
+        companionReleaseQueued = false;
+    } else {
+        p->x = companionMouseX;
+        p->y = companionMouseY;
+        p->pressed = companionMouseHeld && p->x >= 0 && p->y >= 0;
+    }
     return true;
 }
 static void duo_window_destroy(void) {
@@ -145,6 +162,8 @@ static void duo_window_destroy(void) {
     companionFrameW = companionFrameH = 0;
     companionWindowVisible = companionMouseHeld = false;
     companionMousePulse = 0;
+    companionReleaseQueued = false;
+    companionPressX = companionPressY = -1;
 }
 // The gameplay's overlays and projection see only the top screen.
 static int pd_screen_output_size(SDL_Renderer *r, int *w, int *h) {
@@ -530,12 +549,23 @@ static void events(void) {
         if (e.button.y >= bottom.y) {
             if (e.button.button == SDL_BUTTON_LEFT) {
                 duo_mouse_at(e.button.x, e.button.y);
-                companionMouseHeld = e.type == SDL_MOUSEBUTTONDOWN;
-                if (companionMouseHeld && companionMouseX >= 0) companionMousePulse = 1;
+                if (e.type == SDL_MOUSEBUTTONDOWN && companionMouseX >= 0) {
+                    companionMouseHeld = true;
+                    companionPressX = companionMouseX;
+                    companionPressY = companionMouseY;
+                    companionMousePulse = 1;
+                    companionReleaseQueued = false;
+                } else if (e.type == SDL_MOUSEBUTTONUP) {
+                    companionMouseHeld = false;
+                    companionReleaseQueued = true;
+                }
             }
             continue;
         }
-        if (e.type == SDL_MOUSEBUTTONUP) companionMouseHeld = false;
+        if (e.type == SDL_MOUSEBUTTONUP && companionMouseHeld) {
+            companionMouseHeld = false;
+            companionReleaseQueued = true;
+        }
     }
     if (e.type == SDL_MOUSEWHEEL && companionMouseY >= 0) continue;
 #endif
