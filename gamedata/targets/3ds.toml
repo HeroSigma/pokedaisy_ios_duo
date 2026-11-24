@@ -1689,3 +1689,9 @@ typeChart = 'typeEffectivenessSoulGold'
 speciesTypes = 'speciesTypeDataSoulGold'
 genderRatios = 'genderRatiosSoulGold'
 mapsecs = 'mapSecDataSoulGold'
+
+# Exact November 23 2026 Legends Awakening ROM: verified party and native icons.
+# Do not enable unverified battle, bag, map or write operations.
+[config.legends_awakening]
+name = 'LEGENDS_AWAKENING'
+parts = ['ram', 'icons']
