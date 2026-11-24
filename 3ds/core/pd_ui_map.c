@@ -254,12 +254,8 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
             ui_notice(c, "LOCATION UNAVAILABLE", "Enter the overworld to show", "the current map position.");
             return;
         }
-        int iy = y + 34;
-        char line[96];
-        // The matching ROM's gRegionMapEntries is an array of
-        // RegionMapLocation {u8 x,y,width,height; const u8 *name}, stride 8.
-        // Read names/rectangles directly from the cartridge, never retail
-        // Emerald's differing region-map section tables.
+        // RegionMapLocation is 8 bytes in the exact ROM:
+        // x, y, width, height, then an address of the encoded place name.
         unsigned mx = 0, my = 0, mw = 0, mh = 0;
         char place[64] = "";
         if (g->rom && s->mapsec >= 0 && s->mapsec < 256) {
@@ -272,31 +268,56 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
                 if (nameRaw) pd_gen3_text(nameRaw, 32, place, sizeof place);
             }
         }
-        if (*place) {
-            pd_text_fit(c, x + 9, iy, w - 18, place, PD_TITLE_TEXT, PD_TITLE_SHADOW);
-            iy += 18;
-        }
-        snprintf(line, sizeof line, "MAP SECTION: %d", s->mapsec);
-        pd_text(c, x + 9, iy, line, PD_LABEL, PD_LABEL_SHADOW);
-        iy += 18;
-        snprintf(line, sizeof line, "MAP GROUP: %d   NUMBER: %d", s->mapGroup, s->mapNum);
+        int iy = y + 34;
+        pd_text_fit(c, x + 9, iy, w - 18, *place ? place : "UNKNOWN LOCATION",
+                    PD_TITLE_TEXT, PD_TITLE_SHADOW);
+        iy += 21;
+        char line[96];
+        snprintf(line, sizeof line, "SECTION %d  MAP %d/%d", s->mapsec, s->mapGroup, s->mapNum);
         pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
         iy += 18;
-        snprintf(line, sizeof line, "POSITION: X %d   Y %d", s->x, s->y);
+        snprintf(line, sizeof line, "PLAYER %d,%d   SIZE %d x %d", s->x, s->y, s->mapW, s->mapH);
         pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-        iy += 18;
-        if (mw && mh && mw <= 30 && mh <= 20) {
-            snprintf(line, sizeof line, "REGION TILE: %u,%u   AREA: %u x %u", mx, my, mw, mh);
-            pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-            iy += 18;
+        // Phase 2: accurately mark this section's ROM-defined region grid
+        // location. Do not fill in guessed roads, adjacent regions or art.
+        const int gridW = 28, gridH = 15, cell = 6;
+        const int gx = (c->w - gridW * cell) / 2;
+        const int gy = iy + 20;
+        pd_fill(c, gx - 3, gy - 3, gridW * cell + 6, gridH * cell + 6, 0x101F2B);
+        for (int ry = 0; ry < gridH; ry++)
+            for (int rx = 0; rx < gridW; rx++)
+                pd_fill(c, gx + rx * cell, gy + ry * cell,
+                        cell - 1, cell - 1, 0x34545C);
+        if (mw > 0 && mh > 0 && mx < (unsigned)gridW && my < (unsigned)gridH &&
+            mx + mw <= (unsigned)gridW && my + mh <= (unsigned)gridH) {
+            for (unsigned ry = my; ry < my + mh; ry++)
+                for (unsigned rx = mx; rx < mx + mw; rx++)
+                    pd_fill(c, gx + (int)rx * cell, gy + (int)ry * cell,
+                            cell - 1, cell - 1, 0xE7B54E);
+            const int markerX = gx + (int)mx * cell + (int)(mw * cell) / 2;
+            const int markerY = gy + (int)my * cell + (int)(mh * cell) / 2;
+            pd_fill(c, markerX - 1, markerY - 3, 3, 7, 0xFFFFFF);
+            pd_fill(c, markerX - 3, markerY - 1, 7, 3, 0xFFFFFF);
         }
-        if (s->mapW > 0 && s->mapH > 0) {
-            snprintf(line, sizeof line, "MAP SIZE: %d x %d", s->mapW, s->mapH);
-            pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
-            iy += 18;
+        // The original map graphics require the exact game's Smol decoder.
+        // Read headers through the ROM table so we can diagnose its formats.
+        int gfxMode = -1, tileMode = -1;
+        if (g->rom) {
+            const uint8_t* info = pd_rom_at(g, 0x08D191C4u, 28);
+            if (info) {
+                const uint32_t gptr = (uint32_t)info[16] | (uint32_t)info[17] << 8 |
+                                      (uint32_t)info[18] << 16 | (uint32_t)info[19] << 24;
+                const uint32_t tptr = (uint32_t)info[12] | (uint32_t)info[13] << 8 |
+                                      (uint32_t)info[14] << 16 | (uint32_t)info[15] << 24;
+                const uint8_t* gh = pd_rom_at(g, gptr, 1);
+                const uint8_t* th = pd_rom_at(g, tptr, 1);
+                if (gh) gfxMode = gh[0] & 15;
+                if (th) tileMode = th[0] & 15;
+            }
         }
-        pd_text_fit(c, x + 9, iy + 9, w - 18, "REGION ART: NOT MAPPED", PD_MUTED, PD_MUTED_SHADOW);
-        pd_text_fit(c, x + 9, iy + 23, w - 18, "FLY: DISABLED UNTIL VERIFIED", PD_MUTED, PD_MUTED_SHADOW);
+        snprintf(line, sizeof line, "ROM MAP GRID   GFX %d  TILES %d", gfxMode, tileMode);
+        pd_text_fit(c, x + 9, gy + gridH * cell + 6, w - 18, line,
+                    PD_MUTED, PD_MUTED_SHADOW);
         return;
     }
     const struct pd_map_art* art = pd_map_art(g);
