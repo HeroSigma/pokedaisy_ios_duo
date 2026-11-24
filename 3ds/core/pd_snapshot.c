@@ -492,12 +492,17 @@ void pd_snapshot_read(struct pd_snapshot* s, const struct pd_game* g, pd_read_fn
     s->money = -1;
     const struct pd_config* cfg = g->cfg;
     if (!cfg) return;
+    // Legends Awakening's party decoder is iPhone-verified, but the Windows
+    // battle/save/map layouts are not. Leave those memory reads disabled.
+    const bool legendsPartyOnly = strcmp(g->sha1,
+        "552ec33df5b6c31409fee1b8e5346e4a8de83ce9") == 0;
     if (cfg->gb) {
         pd_gb_snapshot_read(s, cfg, read, ctx);
         return;
     }
     s->valid = true;
-    read_u32(read, ctx, cfg->gMain + (cfg->frameCounterOff ? cfg->frameCounterOff : 0x24), &s->frame);
+    if (!legendsPartyOnly)
+        read_u32(read, ctx, cfg->gMain + (cfg->frameCounterOff ? cfg->frameCounterOff : 0x24), &s->frame);
 
     // --- party ---
     uint8_t count = 0;
@@ -509,6 +514,12 @@ void pd_snapshot_read(struct pd_snapshot* s, const struct pd_game* g, pd_read_fn
         for (int i = 0; i < count; i++) {
             if (pd_decode_party_mon_c(raw + i * lay->size, lay, cfg, &s->party[s->partyCount])) s->partyCount++;
         }
+    }
+
+    if (legendsPartyOnly) {
+        // The expansion's held item has flag bits above its 10-bit ID.
+        for (int i = 0; i < s->partyCount; i++) s->party[i].heldItem &= 0x03FF;
+        return;
     }
 
     // --- battle --- (gMain.inBattle is bit 1 of the byte at +0x439)
