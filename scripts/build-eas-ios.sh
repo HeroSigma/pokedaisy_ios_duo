@@ -23,7 +23,7 @@ if [ ! -f third_party/mgba/CMakeLists.txt ]; then
 fi
 test -f third_party/mgba/CMakeLists.txt || { echo "mGBA source missing" >&2; exit 1; }
 
-echo "== Compile the arm64 C core =="
+echo "== Regenerate game compatibility profiles for cloud build =="\npython3 scripts/gen_gamedata.py\n\necho "== Compile the arm64 C core =="
 sh ios/build_core.sh
 
 echo "== Generate Xcode project =="
