@@ -1332,7 +1332,18 @@ static void overlay_draw(bool opaque) {
   }
   SDL_UpdateTexture(overlayTexture, NULL, overlayPx, overlay.w * 4);
   int ow = W, oh = H;
+#ifdef _WIN32
+  // Opaque overlays belong to the full-window ROM library, whereas
+  // translucent gameplay overlays must fit only the upper game screen.
+  // Using pd_screen_output_size() for the library halves the available
+  // height on Windows and shifts its grid above the window.
+  if (opaque)
+    SDL_GetRendererOutputSize(renderer, &ow, &oh);
+  else
+    pd_screen_output_size(renderer, &ow, &oh);
+#else
   pd_screen_output_size(renderer, &ow, &oh);
+#endif
   int s = ow / overlay.w < oh / overlay.h ? ow / overlay.w : oh / overlay.h;
   if (s < 1)
     s = 1;
