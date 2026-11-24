@@ -417,7 +417,8 @@ static void bag_add(struct pd_snapshot* s, int pocket, int item, int quantity);
 // Active expanded-bag pockets use sSlots/sBases, NOT BagPocket.itemSlots.
 static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
                              pd_read_fn read, void* ctx) {
-    enum { LEGENDS_POCKETS = 5, LEGENDS_ITEMS_COUNT = 876,
+    (void)cfg; // the expanded Bag buffer is located by this ROM's exact SHA.
+    enum { LEGENDS_ITEMS_COUNT = 876,
            LEGENDS_MAX_ITEM = LEGENDS_ITEMS_COUNT - 1,
            LEGENDS_PACKED_BYTES = (LEGENDS_MAX_ITEM * 10 + 7) / 8 };
     uint8_t active = 0;
