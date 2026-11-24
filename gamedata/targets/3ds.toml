@@ -1680,4 +1680,4 @@ mapsecs = 'mapSecDataSoulGold'
 # Pokémon Legends Awakening
 [config.legends_awakening]
 name = 'LEGENDS_AWAKENING'
-parts = ['ram']
+parts = ['ram', 'icons']
