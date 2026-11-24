@@ -56,7 +56,36 @@
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 #ifdef _WIN32
+// Windows DS-style layout: one top-level window with two SDL renderers.
+// The companion becomes a native child HWND, not a separate taskbar window.
+#define DUO_HINGE_PX 12
 static SDL_Window *companionWindow = NULL;
+static HWND companionHwnd = NULL;
+static int duoTopH = 0;
+
+static void duo_window_layout(void)
+{
+    if (!window || !renderer || !companionWindow || !companionHwnd) return;
+    int w = 0, h = 0;
+    SDL_GetRendererOutputSize(renderer, &w, &h);
+    if (w < 1 || h < DUO_HINGE_PX + 2) return;
+    const int top = (h - DUO_HINGE_PX) / 2;
+    const int bottomY = top + DUO_HINGE_PX;
+    duoTopH = top;
+    SDL_Rect topViewport = {0, 0, w, top};
+    SDL_RenderSetViewport(renderer, &topViewport);
+    SetWindowPos(companionHwnd, NULL, 0, bottomY, w, h - bottomY,
+                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
+
+// Main-screen callers receive the upper display's dimensions, not the
+// combined parent window. SDL still draws into the viewport above the hinge.
+static int pd_screen_output_size(SDL_Renderer *r, int *w, int *h)
+{
+    const int result = SDL_GetRendererOutputSize(r, w, h);
+    if (!result && r == renderer && duoTopH > 0 && h) *h = duoTopH;
+    return result;
+}
 static SDL_Renderer *companionRenderer = NULL;
 static SDL_Texture *companionTexture = NULL;
 static int companionFrameW = 0, companionFrameH = 0;
@@ -105,8 +134,30 @@ static void duo_window_create(void)
         companionRenderer, 24, 42, 48, 255
     );
 
+    SDL_SysWMinfo childInfo, parentInfo;
+    SDL_VERSION(&childInfo.version);
+    SDL_VERSION(&parentInfo.version);
+    if (!SDL_GetWindowWMInfo(companionWindow, &childInfo) ||
+        !SDL_GetWindowWMInfo(window, &parentInfo) ||
+        childInfo.subsystem != SDL_SYSWM_WINDOWS ||
+        parentInfo.subsystem != SDL_SYSWM_WINDOWS) {
+        SDL_Log("Duo dock: failed to obtain Windows handles");
+        SDL_DestroyRenderer(companionRenderer);
+        SDL_DestroyWindow(companionWindow);
+        companionRenderer = NULL;
+        companionWindow = NULL;
+        return;
+    }
+    companionHwnd = childInfo.info.win.window;
+    HWND parentHwnd = parentInfo.info.win.window;
+    LONG_PTR style = GetWindowLongPtr(companionHwnd, GWL_STYLE);
+    style &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU);
+    style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
+    SetWindowLongPtr(companionHwnd, GWL_STYLE, style);
+    SetParent(companionHwnd, parentHwnd);
     SDL_ShowWindow(companionWindow);
     companionWindowVisible = true;
+    duo_window_layout();
 }
 
 /* Called synchronously from the GBA libretro core, after each gameplay frame.
@@ -145,6 +196,7 @@ static void duo_window_present(void)
 {
     if (!companionWindowVisible || !companionRenderer)
         return;
+    duo_window_layout();
 
     SDL_SetRenderDrawColor(
         companionRenderer, 24, 42, 48, 255
@@ -216,6 +268,8 @@ static void duo_window_destroy(void)
         companionWindow = NULL;
     }
 
+    companionHwnd = NULL;
+    duoTopH = 0;
     companionWindowVisible = false;
     companionMouseHeld = false;
     companionMousePulse = 0;
@@ -1352,7 +1406,7 @@ static SDL_Texture *overlayTexture;
 static int overlayTexW, overlayTexH;
 static void overlay_begin(void) {
   int ow = W, oh = H;
-  SDL_GetRendererOutputSize(renderer, &ow, &oh);
+  pd_screen_output_size(renderer, &ow, &oh);
   int s = ow / 320 < oh / 240 ? ow / 320 : oh / 240;
   if (s < 1)
     s = 1;
@@ -1381,7 +1435,7 @@ static void overlay_draw(bool opaque) {
   }
   SDL_UpdateTexture(overlayTexture, NULL, overlayPx, overlay.w * 4);
   int ow = W, oh = H;
-  SDL_GetRendererOutputSize(renderer, &ow, &oh);
+  pd_screen_output_size(renderer, &ow, &oh);
   int s = ow / overlay.w < oh / overlay.h ? ow / overlay.w : oh / overlay.h;
   if (s < 1)
     s = 1;
@@ -1404,7 +1458,7 @@ static void render_lcd(void) {
   if (!hostSet.lcd)
     return;
   int w, h;
-  if (SDL_GetRendererOutputSize(renderer, &w, &h) < 0 || w <= 0 || h <= 0)
+  if (pd_screen_output_size(renderer, &w, &h) < 0 || w <= 0 || h <= 0)
     return;
   if (!lcdTexture || lcdW != w || lcdH != h) {
     SDL_DestroyTexture(lcdTexture);
@@ -1431,7 +1485,7 @@ static void render_lcd(void) {
 static double presentMs;
 static void present_game(const struct pd_menu *menu) {
   int ow = W, oh = H;
-  SDL_GetRendererOutputSize(renderer, &ow, &oh);
+  pd_screen_output_size(renderer, &ow, &oh);
   SDL_RenderClear(renderer);
   frameRect = frame_place(ow, oh);
   if (frameTexture && frameW > 0) {
@@ -1518,7 +1572,7 @@ static void present_game(const struct pd_menu *menu) {
 }
 static bool capture(const char *path) {
   int w = W, h = H;
-  SDL_GetRendererOutputSize(renderer, &w, &h);
+  pd_screen_output_size(renderer, &w, &h);
   uint32_t *px = malloc((size_t)w * h * 4);
   bool ok = px && SDL_RenderReadPixels(renderer, NULL, SDL_PIXELFORMAT_ARGB8888, px, w * 4) == 0;
   for (int i = 0; ok && i < w * h; i++)
@@ -1821,7 +1875,7 @@ static void perf_frame(uint64_t start, double hz) {
 /* ---- a game ---- */
 static void panel_follow(void) {
   int ow = W, oh = H;
-  SDL_GetRendererOutputSize(renderer, &ow, &oh);
+  pd_screen_output_size(renderer, &ow, &oh);
   char v[32];
   const char *fixed = panel_preset(hostSet.panel); // the PANEL preset: the screen the core lays out for
   if (fixed)
@@ -2515,7 +2569,7 @@ static int libraryTopW, libraryTopH;
 /* The same viewport library_present draws: window pixels, the scale, the canvas and its top-left corner. */
 static void library_viewport(int *ow, int *oh, int *scale, int *w, int *h, int *x0, int *y0) {
   int width = W, height = H;
-  SDL_GetRendererOutputSize(renderer, &width, &height);
+  pd_screen_output_size(renderer, &width, &height);
   int s = width / 560 < height / 400 ? width / 560 : height / 400;
   if (s < 1)
     s = 1;
@@ -2734,6 +2788,10 @@ int main(int argc, char **argv) {
     fullscreen = false;
   // POCKET_WINDOW=WxH: a window the size of a device's panel, for trying a layout on a desktop.
   int winW = W, winH = H;
+#ifdef _WIN32
+  // Default to an upright, single-window dual screen on Windows.
+  winH = 2 * H + DUO_HINGE_PX;
+#endif
   const char *size = getenv("POCKET_WINDOW");
   if (size &&
       (sscanf(size, "%dx%d", &winW, &winH) != 2 || winW < 160 || winH < 144 || winW > 8192 || winH > 8192))
