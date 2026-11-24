@@ -56,129 +56,48 @@
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 #ifdef _WIN32
-// Windows DS-style layout: one top-level window with two SDL renderers.
-// The companion becomes a native child HWND, not a separate taskbar window.
+// Single-window Windows Duo: game viewport above a 12px hinge, companion
+// rendered directly with the SAME SDL renderer below it. No child HWNDs.
 #define DUO_HINGE_PX 12
-static SDL_Window *companionWindow = NULL;
-static HWND companionHwnd = NULL;
-static int duoTopH = 0;
-
-static void duo_window_layout(void)
-{
-    if (!window || !renderer || !companionWindow || !companionHwnd) return;
-    int w = 0, h = 0;
-    SDL_GetRendererOutputSize(renderer, &w, &h);
-    if (w < 1 || h < DUO_HINGE_PX + 2) return;
-    const int top = (h - DUO_HINGE_PX) / 2;
-    const int bottomY = top + DUO_HINGE_PX;
-    duoTopH = top;
-    SDL_Rect topViewport = {0, 0, w, top};
-    SDL_RenderSetViewport(renderer, &topViewport);
-    SetWindowPos(companionHwnd, NULL, 0, bottomY, w, h - bottomY,
-                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-}
-
-// Main-screen callers receive the upper display's dimensions, not the
-// combined parent window. SDL still draws into the viewport above the hinge.
-static int pd_screen_output_size(SDL_Renderer *r, int *w, int *h)
-{
-    const int result = SDL_GetRendererOutputSize(r, w, h);
-    if (!result && r == renderer && duoTopH > 0 && h) *h = duoTopH;
-    return result;
-}
-static SDL_Renderer *companionRenderer = NULL;
 static SDL_Texture *companionTexture = NULL;
 static int companionFrameW = 0, companionFrameH = 0;
 static bool companionWindowVisible = false;
-static int companionMouseX = 0, companionMouseY = 0;
+static int companionMouseX = -1, companionMouseY = -1;
 static bool companionMouseHeld = false;
 static int companionMousePulse = 0;
 
-static void duo_window_create(void)
-{
-    if (companionWindow)
-        return;
-
-    companionWindow = SDL_CreateWindow(
-        "PokeDaisy - Live Companion",
-        SDL_WINDOWPOS_CENTERED,
-        SDL_WINDOWPOS_CENTERED,
-        480,
-        360,
-        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN
-    );
-
-    if (!companionWindow) {
-        SDL_Log("Duo window: %s", SDL_GetError());
-        return;
-    }
-
-    companionRenderer = SDL_CreateRenderer(
-        companionWindow, -1,
-        SDL_RENDERER_ACCELERATED
-    );
-
-    if (!companionRenderer)
-        companionRenderer = SDL_CreateRenderer(
-            companionWindow, -1, SDL_RENDERER_SOFTWARE
-        );
-
-    if (!companionRenderer) {
-        SDL_Log("Duo renderer: %s", SDL_GetError());
-        SDL_DestroyWindow(companionWindow);
-        companionWindow = NULL;
-        return;
-    }
-
-    SDL_SetRenderDrawColor(
-        companionRenderer, 24, 42, 48, 255
-    );
-
-    SDL_SysWMinfo childInfo, parentInfo;
-    SDL_VERSION(&childInfo.version);
-    SDL_VERSION(&parentInfo.version);
-    if (!SDL_GetWindowWMInfo(companionWindow, &childInfo) ||
-        !SDL_GetWindowWMInfo(window, &parentInfo) ||
-        childInfo.subsystem != SDL_SYSWM_WINDOWS ||
-        parentInfo.subsystem != SDL_SYSWM_WINDOWS) {
-        SDL_Log("Duo dock: failed to obtain Windows handles");
-        SDL_DestroyRenderer(companionRenderer);
-        SDL_DestroyWindow(companionWindow);
-        companionRenderer = NULL;
-        companionWindow = NULL;
-        return;
-    }
-    companionHwnd = childInfo.info.win.window;
-    HWND parentHwnd = parentInfo.info.win.window;
-    LONG_PTR style = GetWindowLongPtr(companionHwnd, GWL_STYLE);
-    style &= ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU);
-    style |= WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
-    SetWindowLongPtr(companionHwnd, GWL_STYLE, style);
-    SetParent(companionHwnd, parentHwnd);
-    SDL_ShowWindow(companionWindow);
-    companionWindowVisible = true;
-    duo_window_layout();
+static SDL_Rect duo_top_rect(void) {
+    int w = 0, h = 0;
+    if (renderer) SDL_GetRendererOutputSize(renderer, &w, &h);
+    const int top = h > DUO_HINGE_PX ? (h - DUO_HINGE_PX) / 2 : h;
+    return (SDL_Rect){0, 0, w, top};
 }
+static SDL_Rect duo_bottom_rect(void) {
+    int w = 0, h = 0;
+    if (renderer) SDL_GetRendererOutputSize(renderer, &w, &h);
+    const SDL_Rect top = duo_top_rect();
+    return (SDL_Rect){0, top.h + DUO_HINGE_PX, w, h - top.h - DUO_HINGE_PX};
+}
+static SDL_FRect duo_companion_dst(void) {
+    const SDL_Rect bottom = duo_bottom_rect();
+    const int fw = companionFrameW > 0 ? companionFrameW : 320;
+    const int fh = companionFrameH > 0 ? companionFrameH : 240;
+    const float scale = SDL_min((float)bottom.w / fw, (float)bottom.h / fh);
+    const float dw = fw * scale, dh = fh * scale;
+    return (SDL_FRect){(bottom.w - dw) * 0.5f, bottom.y + (bottom.h - dh) * 0.5f, dw, dh};
+}
+static void duo_window_create(void) { /* No second SDL window is created. */ }
 
-/* Called synchronously from the GBA libretro core, after each gameplay frame.
- * The companion pixels are only valid until this callback returns. */
-static bool duo_window_frame(const struct pd_companion_frame *frame)
-{
-    if (!companionRenderer)
-        return false;
-    if (!frame || !frame->active)
-        return true; /* Core capability probe. */
-    if (!frame->pixels || frame->width <= 0 || frame->height <= 0)
-        return false;
-
-    if (!companionTexture ||
-        frame->width != companionFrameW ||
+static bool duo_window_frame(const struct pd_companion_frame *frame) {
+    if (!renderer) return false;
+    if (!frame || !frame->active) return true; // Capability probe.
+    if (!frame->pixels || frame->width <= 0 || frame->height <= 0) return false;
+    if (!companionTexture || frame->width != companionFrameW ||
         frame->height != companionFrameH) {
-        if (companionTexture)
-            SDL_DestroyTexture(companionTexture);
-        companionTexture = SDL_CreateTexture(companionRenderer,
-            SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
-            frame->width, frame->height);
+        if (companionTexture) SDL_DestroyTexture(companionTexture);
+        companionTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                                            SDL_TEXTUREACCESS_STREAMING,
+                                            frame->width, frame->height);
         companionFrameW = frame->width;
         companionFrameH = frame->height;
         if (companionTexture) {
@@ -186,93 +105,52 @@ static bool duo_window_frame(const struct pd_companion_frame *frame)
             SDL_SetTextureScaleMode(companionTexture, SDL_ScaleModeNearest);
         }
     }
-
+    companionWindowVisible = companionTexture != NULL;
     return companionTexture &&
         SDL_UpdateTexture(companionTexture, NULL, frame->pixels,
                           frame->width * (int)sizeof(uint32_t)) == 0;
 }
-
-static void duo_window_present(void)
-{
-    if (!companionWindowVisible || !companionRenderer)
-        return;
-    duo_window_layout();
-
-    SDL_SetRenderDrawColor(
-        companionRenderer, 24, 42, 48, 255
-    );
-    SDL_RenderClear(companionRenderer);
-    if (companionTexture && companionFrameW > 0 && companionFrameH > 0) {
-        int w = 480, h = 360;
-        SDL_GetRendererOutputSize(companionRenderer, &w, &h);
-        const float scale = SDL_min((float)w / companionFrameW,
-                                    (float)h / companionFrameH);
-        SDL_FRect dst = {(w - companionFrameW * scale) * 0.5f,
-                         (h - companionFrameH * scale) * 0.5f,
-                         companionFrameW * scale, companionFrameH * scale};
-        SDL_RenderCopyF(companionRenderer, companionTexture, NULL, &dst);
-    }
-    SDL_RenderPresent(companionRenderer);
+static void duo_window_present(void) {
+    if (!companionWindowVisible || !companionTexture || !renderer) return;
+    const SDL_Rect bottom = duo_bottom_rect();
+    SDL_RenderSetViewport(renderer, NULL);
+    SDL_SetRenderDrawColor(renderer, 22, 38, 46, 255);
+    SDL_RenderFillRect(renderer, &bottom);
+    SDL_SetRenderDrawColor(renderer, 54, 63, 70, 255);
+    SDL_Rect hinge = {0, bottom.y - DUO_HINGE_PX, bottom.w, DUO_HINGE_PX};
+    SDL_RenderFillRect(renderer, &hinge);
+    SDL_FRect dst = duo_companion_dst();
+    SDL_RenderCopyF(renderer, companionTexture, NULL, &dst);
 }
-
-/* Convert second-window mouse coordinates through the same letterbox
- * rectangle used by duo_window_present(), so resized windows click accurately. */
-static void duo_mouse_at(int x, int y)
-{
-    if (!companionRenderer)
-        return;
-    int w = 480, h = 360;
-    SDL_GetRendererOutputSize(companionRenderer, &w, &h);
+static void duo_mouse_at(int x, int y) {
+    const SDL_FRect dst = duo_companion_dst();
     const int fw = companionFrameW > 0 ? companionFrameW : 320;
     const int fh = companionFrameH > 0 ? companionFrameH : 240;
-    const float scale = SDL_min((float)w / fw, (float)h / fh);
-    if (scale <= 0)
-        return;
-    const float ox = (w - fw * scale) * 0.5f;
-    const float oy = (h - fh * scale) * 0.5f;
-    companionMouseX = (int)((x - ox) / scale);
-    companionMouseY = (int)((y - oy) / scale);
-    if (companionMouseX < 0 || companionMouseX >= fw ||
-        companionMouseY < 0 || companionMouseY >= fh) {
-        companionMouseX = -1;
-        companionMouseY = -1;
-    }
+    companionMouseX = companionMouseY = -1;
+    if (dst.w <= 0 || dst.h <= 0 || x < dst.x || y < dst.y ||
+        x >= dst.x + dst.w || y >= dst.y + dst.h) return;
+    companionMouseX = (int)((x - dst.x) * fw / dst.w);
+    companionMouseY = (int)((y - dst.y) * fh / dst.h);
 }
-
-static bool duo_window_pointer(struct pd_companion_pointer *p)
-{
-    if (!companionRenderer || !p)
-        return false;
-    p->x = companionMouseX;
-    p->y = companionMouseY;
+static bool duo_window_pointer(struct pd_companion_pointer *p) {
+    if (!p) return false;
+    p->x = companionMouseX; p->y = companionMouseY;
     p->pressed = companionMouseHeld || companionMousePulse > 0;
-    if (companionMousePulse > 0)
-        companionMousePulse--;
+    if (companionMousePulse > 0) companionMousePulse--;
     return true;
 }
-
-static void duo_window_destroy(void)
-{
-    if (companionTexture) {
-        SDL_DestroyTexture(companionTexture);
-        companionTexture = NULL;
-    }
+static void duo_window_destroy(void) {
+    if (companionTexture) SDL_DestroyTexture(companionTexture);
+    companionTexture = NULL;
     companionFrameW = companionFrameH = 0;
-    if (companionRenderer) {
-        SDL_DestroyRenderer(companionRenderer);
-        companionRenderer = NULL;
-    }
-
-    if (companionWindow) {
-        SDL_DestroyWindow(companionWindow);
-        companionWindow = NULL;
-    }
-
-    companionHwnd = NULL;
-    duoTopH = 0;
-    companionWindowVisible = false;
-    companionMouseHeld = false;
+    companionWindowVisible = companionMouseHeld = false;
     companionMousePulse = 0;
+}
+// The gameplay's overlays and projection see only the top screen.
+static int pd_screen_output_size(SDL_Renderer *r, int *w, int *h) {
+    const int rc = SDL_GetRendererOutputSize(r, w, h);
+    if (!rc && r == renderer && h) *h = duo_top_rect().h;
+    return rc;
 }
 #endif
 static SDL_AudioDeviceID audio;
@@ -637,42 +515,31 @@ static void events(void) {
   script_rawkeys();
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
-    #ifdef _WIN32
-    if (companionWindow) {
-        const Uint32 duoId =
-            SDL_GetWindowID(companionWindow);
-
-        if (e.type == SDL_WINDOWEVENT &&
-            e.window.windowID == duoId) {
-            if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
-                SDL_HideWindow(companionWindow);
-                companionWindowVisible = false;
-                companionMouseHeld = false;
-                companionMousePulse = 0;
-            } else if (e.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
-                companionMouseHeld = false;
-            }
-            continue;
-        }
-
-        if (e.type == SDL_MOUSEMOTION && e.motion.windowID == duoId) {
+#ifdef _WIN32
+    // Touch the lower viewport, without sending its clicks to the top game.
+    if (e.type == SDL_MOUSEMOTION) {
+        const SDL_Rect bottom = duo_bottom_rect();
+        if (e.motion.y >= bottom.y) {
             duo_mouse_at(e.motion.x, e.motion.y);
             continue;
         }
-        if ((e.type == SDL_MOUSEBUTTONDOWN ||
-             e.type == SDL_MOUSEBUTTONUP) && e.button.windowID == duoId) {
+        companionMouseX = companionMouseY = -1;
+    }
+    if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+        const SDL_Rect bottom = duo_bottom_rect();
+        if (e.button.y >= bottom.y) {
             if (e.button.button == SDL_BUTTON_LEFT) {
                 duo_mouse_at(e.button.x, e.button.y);
                 companionMouseHeld = e.type == SDL_MOUSEBUTTONDOWN;
-                if (companionMouseHeld && companionMouseX >= 0)
-                    companionMousePulse = 1;
+                if (companionMouseHeld && companionMouseX >= 0) companionMousePulse = 1;
             }
             continue;
         }
-        if (e.type == SDL_MOUSEWHEEL && e.wheel.windowID == duoId)
-            continue;
+        if (e.type == SDL_MOUSEBUTTONUP) companionMouseHeld = false;
     }
+    if (e.type == SDL_MOUSEWHEEL && companionMouseY >= 0) continue;
 #endif
+
     if (e.type == SDL_QUIT)
       running = 0;
     if (e.type == SDL_JOYDEVICEADDED && !SDL_IsGameController(e.jdevice.which))
@@ -1486,7 +1353,12 @@ static double presentMs;
 static void present_game(const struct pd_menu *menu) {
   int ow = W, oh = H;
   pd_screen_output_size(renderer, &ow, &oh);
+  SDL_RenderSetViewport(renderer, NULL);
   SDL_RenderClear(renderer);
+#ifdef _WIN32
+  const SDL_Rect topViewport = duo_top_rect();
+  SDL_RenderSetViewport(renderer, &topViewport);
+#endif
   frameRect = frame_place(ow, oh);
   if (frameTexture && frameW > 0) {
     SDL_Rect src = {0, 0, frameW, frameH};
@@ -1564,10 +1436,10 @@ static void present_game(const struct pd_menu *menu) {
   if (any)
     overlay_draw(false);
   uint64_t t = SDL_GetPerformanceCounter();
-  SDL_RenderPresent(renderer);
-  #ifdef _WIN32
-    duo_window_present();
+#ifdef _WIN32
+  duo_window_present();
 #endif
+  SDL_RenderPresent(renderer);
   presentMs += (double)(SDL_GetPerformanceCounter() - t) * 1000.0 / SDL_GetPerformanceFrequency();
 }
 static bool capture(const char *path) {
@@ -2615,6 +2487,10 @@ static void library_textures_free(void) {
   libraryTopTexture = NULL;
 }
 static void library_present(struct pd_menu *page) {
+#ifdef _WIN32
+  // The game library uses the whole window; only gameplay uses the split.
+  SDL_RenderSetViewport(renderer, NULL);
+#endif
   int ow, oh, s, w, h, x0, y0;
   library_viewport(&ow, &oh, &s, &w, &h, &x0, &y0);
   SDL_RenderClear(renderer);
