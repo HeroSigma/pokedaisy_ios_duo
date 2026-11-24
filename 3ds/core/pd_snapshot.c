@@ -423,49 +423,27 @@ static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
     uint8_t active = 0;
     if (!read(ctx, 0x020016e4u, &active, 1) || active != 1) return false;
 
-    uint8_t bases[LEGENDS_POCKETS * 2];
-    uint8_t desc[LEGENDS_POCKETS * 8];
-    uint8_t packed[LEGENDS_PACKED_BYTES + 2]; // 10-bit quantities can span three bytes
-    uint8_t slots[LEGENDS_MAX_ITEM * 2];
-    if (!read(ctx, 0x020016e8u, bases, sizeof bases) ||
-        !read(ctx, cfg->bagPockets, desc, sizeof desc) ||
-        !read(ctx, 0x020016f4u, slots, sizeof slots) ||
-        !read(ctx, 0x02001dccu, packed, LEGENDS_PACKED_BYTES)) return false;
-    packed[LEGENDS_PACKED_BYTES] = packed[LEGENDS_PACKED_BYTES + 1] = 0;
-
-    // Validate the layout before displaying any entries. The item lists in
-    // sSlots are grouped by real game pocket, and their offsets are sBases.
-    unsigned expectedBase = 0;
-    for (int p = 0; p < LEGENDS_POCKETS; p++) {
-        const uint8_t* d = desc + p * 8;
-        const unsigned cap = u16(d + 4) & 0x03FFu;
-        const unsigned id = u16(d + 4) >> 10;
-        const unsigned base = u16(bases + p * 2);
-        if (id != (unsigned)p || base != expectedBase ||
-            cap > LEGENDS_MAX_ITEM - base) return false;
-        expectedBase += cap;
-    }
-    // Walk the game-maintained item list rather than guessing item category.
-    // Quantities come only from gExpandedBagData, 10 bits per item ID.
-    for (int p = 0; p < LEGENDS_POCKETS; p++) {
-        const unsigned base = u16(bases + p * 2);
-        const unsigned cap = u16(desc + p * 8 + 4) & 0x03FFu;
-        const int outPocket = cfg->bagOrder[p];
-        if (outPocket < 0 || outPocket >= PD_POCKET_COUNT) return false;
-        for (unsigned i = 0; i < cap; i++) {
-            const unsigned id = u16(slots + 2 * (base + i));
-            if (!id) continue;
-            if (id > LEGENDS_MAX_ITEM) {
-                memset(s->bag, 0, sizeof s->bag);
-                return false;
-            }
-            const unsigned bit = (id - 1) * 10;
-            const unsigned at = bit / 8, shift = bit % 8;
-            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8) |
-                                 ((unsigned)packed[at + 2] << 16);
-            const unsigned qty = (raw >> shift) & 0x03FFu;
-            if (qty > 0 && qty <= 999) bag_add(s, outPocket, id, qty);
-        }
+    // The original five game pockets can contain hundreds of entries each,
+    // while the companion has a 256-entry maximum per snapshot bucket.
+    // Decode every item directly from the packed quantities and stripe those
+    // read-only records across five INTERNAL buckets. The Legends UI uses the
+    // item-ID category metadata, so these buckets are not user-facing pockets.
+    // This prevents later item IDs (Mega Stones, Z-Crystals, Tera Shards)
+    // from silently disappearing once a game pocket exceeds 256 entries.
+    uint8_t packed[LEGENDS_PACKED_BYTES + 2];
+    if (!read(ctx, 0x02001dccu, packed, LEGENDS_PACKED_BYTES)) return false;
+    packed[LEGENDS_PACKED_BYTES] = 0;
+    packed[LEGENDS_PACKED_BYTES + 1] = 0;
+    for (unsigned id = 1; id <= LEGENDS_MAX_ITEM; id++) {
+        const unsigned bit = (id - 1) * 10;
+        const unsigned at = bit / 8, shift = bit % 8;
+        const unsigned word = (unsigned)packed[at] |
+                              ((unsigned)packed[at + 1] << 8) |
+                              ((unsigned)packed[at + 2] << 16);
+        const unsigned qty = (word >> shift) & 0x03FFu;
+        if (qty == 0 || qty > 999) continue;
+        const unsigned bucket = (id - 1) % PD_POCKET_COUNT;
+        bag_add(s, (int)bucket, (int)id, (int)qty);
     }
     s->bagOk = true;
     return true;
