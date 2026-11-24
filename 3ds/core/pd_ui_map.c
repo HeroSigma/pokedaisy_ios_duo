@@ -256,6 +256,26 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
         }
         int iy = y + 34;
         char line[96];
+        // The matching ROM's gRegionMapEntries is an array of
+        // RegionMapLocation {u8 x,y,width,height; const u8 *name}, stride 8.
+        // Read names/rectangles directly from the cartridge, never retail
+        // Emerald's differing region-map section tables.
+        unsigned mx = 0, my = 0, mw = 0, mh = 0;
+        char place[64] = "";
+        if (g->rom && s->mapsec >= 0 && s->mapsec < 256) {
+            const uint8_t* ent = pd_rom_at(g, 0x08D1DBDCu + (uint32_t)s->mapsec * 8u, 8);
+            if (ent) {
+                mx = ent[0]; my = ent[1]; mw = ent[2]; mh = ent[3];
+                uint32_t namePtr = (uint32_t)ent[4] | (uint32_t)ent[5] << 8 |
+                                   (uint32_t)ent[6] << 16 | (uint32_t)ent[7] << 24;
+                const uint8_t* nameRaw = pd_rom_at(g, namePtr, 32);
+                if (nameRaw) pd_gen3_text(nameRaw, 32, place, sizeof place);
+            }
+        }
+        if (*place) {
+            pd_text_fit(c, x + 9, iy, w - 18, place, PD_TITLE_TEXT, PD_TITLE_SHADOW);
+            iy += 23;
+        }
         snprintf(line, sizeof line, "MAP SECTION: %d", s->mapsec);
         pd_text(c, x + 9, iy, line, PD_LABEL, PD_LABEL_SHADOW);
         iy += 23;
@@ -265,6 +285,11 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
         snprintf(line, sizeof line, "POSITION: X %d   Y %d", s->x, s->y);
         pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
         iy += 23;
+        if (mw && mh && mw <= 30 && mh <= 20) {
+            snprintf(line, sizeof line, "REGION TILE: %u,%u   AREA: %u x %u", mx, my, mw, mh);
+            pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
+            iy += 23;
+        }
         if (s->mapW > 0 && s->mapH > 0) {
             snprintf(line, sizeof line, "MAP SIZE: %d x %d", s->mapW, s->mapH);
             pd_text_fit(c, x + 9, iy, w - 18, line, PD_LABEL, PD_LABEL_SHADOW);
