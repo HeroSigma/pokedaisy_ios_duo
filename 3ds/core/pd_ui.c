@@ -686,7 +686,11 @@ static void act(struct pd_ui* ui, int id) {
         ui->action = PD_ACTION_ITEM_TAKE;
     } else if (id == HIT_BACK) {
         pd_ui_back(ui);
-    } else if (id >= HIT_BAG_TAB && id < HIT_BAG_LIST) {
+    } else if (id == HIT_BAG_CAT_PREV) {
+        if (ui->bagTabPage > 0) ui->bagTabPage--;
+    } else if (id == HIT_BAG_CAT_NEXT) {
+        if (ui->bagTabPage < 2) ui->bagTabPage++;
+    } else if (id >= HIT_BAG_TAB && id < HIT_BAG_CAT_PREV) {
         ui->bagPocket = id - HIT_BAG_TAB;
         ui->bagSelected = -1;
         ui->bagScroll = 0;
