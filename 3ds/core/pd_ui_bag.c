@@ -318,7 +318,8 @@ static void description(struct pd_ui* ui, struct pd_canvas* c, const struct pd_g
         text = pd_legends_bag_build(g) ? pd_legends_item_name(id) : pd_item_name(g, id);
     if (!text) text = "";
     int tx = x + f + 6, tw = w - 2 * (f + 6) - room;
-    if (pd_draw_item_icon(c, g, id, x + f + 3, y + (h - PD_ITEM_ICON) / 2, false)) {
+    // Retail Emerald icons are not valid for this expansion's item IDs.
+    if (!pd_legends_bag_build(g) && pd_draw_item_icon(c, g, id, x + f + 3, y + (h - PD_ITEM_ICON) / 2, false)) {
         tx += PD_ITEM_ICON + 2;
         tw -= PD_ITEM_ICON + 2;
     }
