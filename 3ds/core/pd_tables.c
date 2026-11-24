@@ -54,8 +54,18 @@ static const struct pd_move_info* move_info(const struct pd_game* g, int move) {
     return move > 0 && move < count && table[move].name ? &table[move] : NULL;
 }
 
+// Exact Legends Awakening build: these expansion move IDs were verified against
+// the game's own Summary screen. Do not apply them to retail or other hacks.
+static bool legends_awakening_build(const struct pd_game* g) {
+    return g && strcmp(g->sha1, "552ec33df5b6c31409fee1b8e5346e4a8de83ce9") == 0;
+}
+
 const char* pd_move_name(const struct pd_game* g, int move, char* buf, size_t len) {
     if (move <= 0) return "-";
+    if (legends_awakening_build(g)) {
+        if (move == 501) return "QUICK GUARD";
+        if (move == 372) return "ASSURANCE";
+    }
     const struct pd_move_info* m = move_info(g, move);
     if (m) {
         if (hack_text(g) && hack_text(g)->moves) {
