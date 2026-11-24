@@ -359,7 +359,10 @@ void ui_bag_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
         return;
     }
     if (!s->bagOk) {
-        ui_notice(c, "NO BAG YET", "The bag shows once the game", "has loaded a save.");
+        if (g && !strcmp(g->sha1, "552ec33df5b6c31409fee1b8e5346e4a8de83ce9"))
+            ui_notice(c, "BAG UNMAPPED", "Legends Awakening bag memory", "is not verified yet.");
+        else
+            ui_notice(c, "NO BAG YET", "The bag shows once the game", "has loaded a save.");
         return;
     }
     const struct pd_bag_palette* p = ui->bagPalette ? ui->bagPalette : pd_bag_cur;
