@@ -241,7 +241,10 @@ void ui_map_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
     lastGame = g;
     const struct pd_map_art* art = pd_map_art(g);
     if (!art) {
-        ui_notice(c, "NO MAP", "The region map's art wasn't found", "in this ROM.");
+        if (g && !strcmp(g->sha1, "552ec33df5b6c31409fee1b8e5346e4a8de83ce9"))
+            ui_notice(c, "MAP UNMAPPED", "Legends Awakening map artwork", "has not been indexed yet.");
+        else
+            ui_notice(c, "NO MAP", "The region map's art wasn't found", "in this ROM.");
         return;
     }
     int playerPage = -1, ptx = 0, pty = 0;
