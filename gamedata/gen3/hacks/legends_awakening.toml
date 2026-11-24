@@ -44,3 +44,11 @@ monIconPaletteIndices = 0x0876A3D2
 monPalIdxStride = 0x108
 monPalIdxMask = 0x07
 monIconPaletteTable = 0x08D09A9C
+
+# Override the inherited retail Emerald Pokédex count for icon bounds.
+# Legends-Awakening-Reborn/include/constants/species.h has SPECIES_EGG=1574,
+# so the species table includes IDs 0 through 1574 (1575 entries).
+# This does not enable Pokédex data reads: only the icon bound is used.
+[config.legends_awakening.pokedex]
+base = 'POKEDEX_EMERALD'
+speciesCount = 1575
