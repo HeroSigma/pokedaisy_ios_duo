@@ -27,3 +27,18 @@ saveBlock2Ptr = 0x030050E4
 speciesMask = 0x07FF
 moveMask = 0x07FF
 ppMask = 0x7F
+
+# ROM-specific native icon table layout.
+# The matching ROM's GetMonIconTilesIsEgg at 0x081930C8:
+# species * (33 * 8) = species * 0x108
+# reads iconSprite at +0x68, female iconSprite at +0x7C.
+# In the enabled-gender/footprint source layout iconPalIndex follows
+# footprint pointer (+0x80) and 6 size bytes (+0x84..0x89): +0x8A.
+# Palette table is gMonIconPaletteTable from the matching ELF.
+# Note: UI currently renders standard icons, without female personality.
+monIconTable = 0x0876A3B0
+monIconStride = 0x108
+monIconPaletteIndices = 0x0876A3D2
+monPalIdxStride = 0x108
+monPalIdxMask = 0x07
+monIconPaletteTable = 0x08D09A9C
