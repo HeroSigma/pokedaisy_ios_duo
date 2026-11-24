@@ -441,7 +441,10 @@ void ui_bag_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, 
     if (ui->bagSelected >= v.count) ui->bagSelected = -1;
     int tabW = c->w * 27 / 100, panelX = MARGIN + tabW - (ui->shoulderTabs ? 0 : 3);
     bool details = ui->bagSelected >= 0 && (!ui->bagSource || ui->bagDetails);
-    int bottom = details ? c->h - MARGIN - DESC_H - 4 : c->h - MARGIN;
+    // Legends' original item descriptions often need three readable lines.
+    // Reserve enough room without changing retail-game layouts.
+    const int descH = v.legends ? 56 : DESC_H;
+    int bottom = details ? c->h - MARGIN - descH - 4 : c->h - MARGIN;
     list(ui, c, p, &v, panelX, CONTENT_Y, c->w - MARGIN - panelX, bottom - CONTENT_Y);
     const bool sort = !details && (ui->shoulderTabs || ui->bagSelected < 0);
     const int sortY = c->h - MARGIN - 22;
