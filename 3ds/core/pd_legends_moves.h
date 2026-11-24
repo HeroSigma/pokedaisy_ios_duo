@@ -1,6 +1,6 @@
-// Auto-derived from HeroSigma/LegendsAwaken include/constants/moves.h.
+// Auto-derived from HeroSigma/Legends-Awakening-Reborn include/constants/moves.h.
 // ROM-specific display names; no memory reads or game modifications.
-// Generated against source at GitHub default revision (November 2026).
+// Verified against Legends-Awakening-Reborn enum Move numbering (November 2026).
 #ifndef PD_LEGENDS_MOVES_H
 #define PD_LEGENDS_MOVES_H
 static const char* const pd_legends_move_names[] = {
