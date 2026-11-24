@@ -2,6 +2,7 @@
 #include "pd_randomized.h"
 
 #include "pd_game.h"
+#include "pd_legends_moves.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -54,8 +55,14 @@ static const struct pd_move_info* move_info(const struct pd_game* g, int move) {
     return move > 0 && move < count && table[move].name ? &table[move] : NULL;
 }
 
+static bool legends_awakening_build(const struct pd_game* g) {
+    return g && strcmp(g->sha1, "552ec33df5b6c31409fee1b8e5346e4a8de83ce9") == 0;
+}
+
 const char* pd_move_name(const struct pd_game* g, int move, char* buf, size_t len) {
     if (move <= 0) return "-";
+    if (legends_awakening_build(g) && (unsigned) move < sizeof(pd_legends_move_names) / sizeof(*pd_legends_move_names) &&
+        pd_legends_move_names[move]) return pd_legends_move_names[move];
     const struct pd_move_info* m = move_info(g, move);
     if (m) {
         if (hack_text(g) && hack_text(g)->moves) {
