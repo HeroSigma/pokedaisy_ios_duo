@@ -36,6 +36,8 @@ ppMask = 0x7F
 # footprint pointer (+0x80) and 6 size bytes (+0x84..0x89): +0x8A.
 # Palette table is gMonIconPaletteTable from the matching ELF.
 # Note: UI currently renders standard icons, without female personality.
+# SPECIES_EGG = 1574 in Legends-Awakening-Reborn/include/constants/species.h.
+eggSpecies = 1574
 monIconTable = 0x0876A3B0
 monIconStride = 0x108
 monIconPaletteIndices = 0x0876A3D2
