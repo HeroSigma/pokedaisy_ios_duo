@@ -494,6 +494,7 @@ struct pd_ui {
     int boxShown, boxSlot, boxSummary, boxPartySlot, boxTarget;
     bool boxSwapPick, boxDepositing;
     char boxMessage[64];
+    int bagTabPage;  // visible Legends Awakening category page (0-based)
     int bagPocket;   // the open pocket tab (native ID for bagSource, 0 is always ALL)
     int bagTabCount;
     bool bagTabs;    // the D-pad cursor is on the pocket tab bar rather than the list ...
