@@ -425,13 +425,13 @@ static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
 
     uint8_t bases[LEGENDS_POCKETS * 2];
     uint8_t desc[LEGENDS_POCKETS * 8];
-    uint8_t packed[LEGENDS_PACKED_BYTES + 1]; // extra byte for final unaligned extraction
+    uint8_t packed[LEGENDS_PACKED_BYTES + 2]; // 10-bit quantities can span three bytes
     uint8_t slots[LEGENDS_MAX_ITEM * 2];
     if (!read(ctx, 0x020016e8u, bases, sizeof bases) ||
         !read(ctx, cfg->bagPockets, desc, sizeof desc) ||
         !read(ctx, 0x020016f4u, slots, sizeof slots) ||
         !read(ctx, 0x02001dccu, packed, LEGENDS_PACKED_BYTES)) return false;
-    packed[LEGENDS_PACKED_BYTES] = 0;
+    packed[LEGENDS_PACKED_BYTES] = packed[LEGENDS_PACKED_BYTES + 1] = 0;
 
     // Validate the layout before displaying any entries. The item lists in
     // sSlots are grouped by real game pocket, and their offsets are sBases.
@@ -461,7 +461,7 @@ static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
             }
             const unsigned bit = (id - 1) * 10;
             const unsigned at = bit / 8, shift = bit % 8;
-            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8);
+            const unsigned raw = packed[at] | ((unsigned)packed[at + 1] << 8) |\n                                 ((unsigned)packed[at + 2] << 16);
             const unsigned qty = (raw >> shift) & 0x03FFu;
             if (qty > 0 && qty <= 999) bag_add(s, outPocket, id, qty);
         }
