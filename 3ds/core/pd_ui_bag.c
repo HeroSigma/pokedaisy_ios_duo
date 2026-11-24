@@ -11,6 +11,7 @@
 #include "pd_tr.h"
 #include "pd_icon.h"
 #include "pd_tables.h"
+#include "pd_legends_items.h"
 #include "pd_ui_internal.h"
 
 #define TAB_H 22
@@ -18,7 +19,7 @@
 #define DESC_H 44
 #define FIRST_HM 339 // ITEM_HM01..ITEM_HM08: no quantity, like the game
 #define LAST_HM 346
-#define MAX_TABS (PD_POCKET_COUNT + 1)
+#define MAX_TABS 14 // Legends: ALL plus 13 item categories
 #define MAX_ROWS (HIT_BAG_ROW_END - HIT_BAG_ROW)
 
 // What one tab lists: ALL, then each pocket with something in it, in the
@@ -31,6 +32,7 @@ struct bag_row {
 };
 
 struct bag_view {
+    bool legends;
     int tabs, active, pockets[MAX_TABS]; // pockets[0] = ALL
     int count;
     struct bag_row rows[MAX_ROWS];
@@ -57,6 +59,28 @@ static void add_row(struct bag_view* v, struct pd_item item, const char* name, b
 static void gather(struct pd_ui* ui, const struct pd_game* g, const struct pd_snapshot* s, struct bag_view* v) {
     v->tabs = 1;
     v->active = v->count = 0;
+    v->legends = pd_legends_bag_build(g) && !ui->bagSource;
+    if (v->legends) {
+        // Filter by the exact game's ItemInfo category metadata instead of
+        // retail Emerald's five underlying pocket labels.
+        v->tabs = MAX_TABS;
+        v->pockets[0] = -1;
+        for (int k = 1; k < MAX_TABS; k++) v->pockets[k] = k - 1;
+        if (ui->bagPocket < 0 || ui->bagPocket >= MAX_TABS) ui->bagPocket = 0;
+        v->active = ui->bagPocket;
+        for (int p = 0; p < PD_POCKET_COUNT; p++) {
+            const struct pd_pocket_items* items = &s->bag[p];
+            for (int j = 0; j < items->count && v->count < MAX_ROWS; j++) {
+                const struct pd_item item = items->items[j];
+                const int category = pd_legends_item_category(item.id);
+                if (v->active && category != v->active - 1) continue;
+                const char* name = pd_legends_item_name(item.id);
+                if (!name) name = pd_item_name(g, item.id);
+                add_row(v, item, name, category != 4 && category != 2, category);
+            }
+        }
+        return;
+    }
     const struct pd_bag_source* source = ui->bagSource;
     if (source) {
         unsigned occupied = 0;
@@ -155,25 +179,31 @@ static int open_tab(struct pd_canvas* c, const struct pd_bag_palette* p, int x, 
 // The pocket tabs down the left, the open one joined to the list.
 static void tabs(struct pd_ui* ui, struct pd_canvas* c, const struct pd_bag_palette* p, const struct bag_view* v,
                  int x, int w, int bottom, int panelX) {
-    int visible = ui->shoulderTabs ? (bottom - CONTENT_Y + 3) / (TAB_H + 3) : v->tabs;
+    const int tabH = v->legends ? 12 : TAB_H;
+    const int gap = v->legends ? 1 : 3;
+    int visible = v->legends ? v->tabs :
+                  (ui->shoulderTabs ? (bottom - CONTENT_Y + gap) / (tabH + gap) : v->tabs);
     if (visible < 1) return;
     int first = v->active >= visible ? v->active - visible + 1 : 0;
     for (int i = first; i < v->tabs; i++) {
-        int y = CONTENT_Y + (i-first) * (TAB_H + 3);
-        if (ui->shoulderTabs && y + TAB_H > bottom) break;
+        int y = CONTENT_Y + (i-first) * (tabH + gap);
+        if (y + tabH > bottom) break;
         bool open = i == v->active;
         uint32_t fill = p->panel[p->tabLayers].color;
         // The open tab reaches onto the list's frame (beside the list only: with the shoulder hints it stands alone).
-        const bool joined = open && !ui->shoulderTabs;
-        int f = joined ? open_tab(c, p, x, y, panelX, fill, y == CONTENT_Y) : pd_layered_box(c, x, y, w, TAB_H, 3, p->panel, p->tabLayers, fill);
-        const char* name = ui->bagSource ? ui->bagSource->pocketName(ui->bagSource->ctx,v->pockets[i]) : v->pockets[i] < 0 ? pd_tr("ALL") : pd_pocket_name(v->pockets[i]);
+        const bool joined = !v->legends && open && !ui->shoulderTabs;
+        int f = joined ? open_tab(c, p, x, y, panelX, fill, y == CONTENT_Y) : pd_layered_box(c, x, y, w, tabH, 2, p->panel, p->tabLayers, fill);
+        const char* name = v->legends ?
+            (i == 0 ? "ALL" : pd_legends_bag_category_names[v->pockets[i]]) :
+            ui->bagSource ? ui->bagSource->pocketName(ui->bagSource->ctx,v->pockets[i]) :
+            v->pockets[i] < 0 ? pd_tr("ALL") : pd_pocket_name(v->pockets[i]);
         // The capitals (font rows 4-12, the shadow 13), a free row and the open tab's 2-row underline, centred as one block
         // on every tab: the line never touches the letters (a tab's inside is only 16-20 rows).
-        int capTop = y + f + (TAB_H - 2 * f - 13 + 1) / 2;
-        int tx = x + f + 5, ty = capTop - 4;
+        int capTop = y + f + (tabH - 2 * f - 13 + 1) / 2;
+        int tx = x + f + 5, ty = v->legends ? y + 1 : capTop - 4;
         pd_text_fit(c, tx, ty, w - 2 * f - 8, name, p->tabText, p->tabTextShadow);
-        // The app's tab-wide underline, a row clear of the letters' shadow.
-        if (open) pd_fill(c, tx, capTop + 11, x + w - f - 5 - tx, 2, p->cursor);
+        if (open) pd_fill(c, tx, v->legends ? y + tabH - 1 : capTop + 11,
+                          x + w - f - 5 - tx, v->legends ? 1 : 2, p->cursor);
         // A backend's bag keys its tabs by its own pocket ids (ui->bagPocket), the shared one by the tab's place.
         const int key = ui->bagSource ? v->pockets[i] : i;
         const int hitId = HIT_BAG_TAB + key;
@@ -181,11 +211,11 @@ static void tabs(struct pd_ui* ui, struct pd_canvas* c, const struct pd_bag_pale
         // The D-pad cursor, on the tab it chose (not on the open one, until it is moved there).
         if (ui->bagTabs && ui->bagTabKey == key) {
             pd_fill(c, x, y, w, 2, PD_VALUE);
-            pd_fill(c, x, y + TAB_H - 2, w, 2, PD_VALUE);
-            pd_fill(c, x, y, 2, TAB_H, PD_VALUE);
-            pd_fill(c, x + w - 2, y, 2, TAB_H, PD_VALUE);
+            pd_fill(c, x, y + tabH - 2, w, 2, PD_VALUE);
+            pd_fill(c, x, y, 2, tabH, PD_VALUE);
+            pd_fill(c, x + w - 2, y, 2, tabH, PD_VALUE);
         }
-        ui_add_hit(ui, x, y, w, TAB_H, hitId);
+        ui_add_hit(ui, x, y, w, tabH, hitId);
     }
 }
 
