@@ -407,6 +407,53 @@ static bool save_key(const struct pd_config* cfg, pd_read_fn read, void* ctx, ui
     return cfg->encryptionKeyOff < 0 || read_u32(read, ctx, sb2 + (uint32_t) cfg->encryptionKeyOff, key);
 }
 
+// Legends Awakening (exact ROM SHA): read-only standard BagPocket decoder.
+// The expansion's BagPocket is 8 bytes: pointer (4), 10-bit capacity and
+// 6-bit pocket ID (2), padding (2). ItemSlot is 4 bytes (u16 ID, u16 qty).
+// This deliberately does not access the game's expanded-bag storage; such
+// pockets must be mapped separately rather than presenting invented data.
+static bool read_legends_bag(struct pd_snapshot* s, const struct pd_config* cfg,
+                             pd_read_fn read, void* ctx) {
+    uint32_t sb2 = 0, key = 0;
+    if (!save_block(cfg, read, ctx, cfg->saveBlock2Ptr, &sb2) ||
+        !save_key(cfg, read, ctx, sb2, &key)) return false;
+    enum { LEGENDS_POCKETS = 5, LEGENDS_POCKET_BYTES = 8 };
+    uint8_t desc[LEGENDS_POCKETS * LEGENDS_POCKET_BYTES];
+    if (!read(ctx, cfg->bagPockets, desc, sizeof(desc))) return false;
+    // Validate every descriptor before using any inventory entries.
+    for (int p = 0; p < LEGENDS_POCKETS; p++) {
+        const uint8_t* d = desc + p * LEGENDS_POCKET_BYTES;
+        const uint32_t ptr = u32(d);
+        const unsigned cap = u16(d + 4) & 0x03FF;
+        const unsigned pocketId = u16(d + 4) >> 10;
+        if (pocketId != (unsigned) p || !cap || cap > 1023 || !in_ram(ptr)) return false;
+    }
+    bool allReadable = true;
+    for (int p = 0; p < LEGENDS_POCKETS; p++) {
+        const uint8_t* d = desc + p * LEGENDS_POCKET_BYTES;
+        const uint32_t ptr = u32(d);
+        unsigned cap = u16(d + 4) & 0x03FF;
+        // Only collect up to the companion's fixed per-pocket capacity.
+        if (cap > PD_POCKET_SLOTS) cap = PD_POCKET_SLOTS;
+        uint8_t raw[PD_POCKET_SLOTS * 4];
+        if (!read(ctx, ptr, raw, cap * 4)) { allReadable = false; continue; }
+        const int outPocket = cfg->bagOrder[p];
+        if (outPocket < 0 || outPocket >= PD_POCKET_COUNT) return false;
+        for (unsigned i = 0; i < cap; i++) {
+            const unsigned id = u16(raw + i * 4);
+            const unsigned qty = u16(raw + i * 4 + 2) ^ (key & 0xFFFF);
+            if (!id || !qty) continue;
+            bag_add(s, outPocket, id, qty);
+        }
+    }
+    if (!allReadable) {
+        memset(s->bag, 0, sizeof(s->bag));
+        return false;
+    }
+    s->bagOk = true;
+    return true;
+}
+
 static void bag_add(struct pd_snapshot* s, int pocket, int item, int quantity) {
     struct pd_pocket_items* p = &s->bag[pocket];
     if (p->count >= PD_POCKET_SLOTS) return;
@@ -519,6 +566,8 @@ void pd_snapshot_read(struct pd_snapshot* s, const struct pd_game* g, pd_read_fn
     if (legendsPartyOnly) {
         // The expansion's held item has flag bits above its 10-bit ID.
         for (int i = 0; i < s->partyCount; i++) s->party[i].heldItem &= 0x03FF;
+        // Inventory only: battle, map and other save readers remain gated.
+        read_legends_bag(s, cfg, read, ctx);
         return;
     }
 
