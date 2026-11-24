@@ -407,6 +407,8 @@ static bool save_key(const struct pd_config* cfg, pd_read_fn read, void* ctx, ui
     return cfg->encryptionKeyOff < 0 || read_u32(read, ctx, sb2 + (uint32_t) cfg->encryptionKeyOff, key);
 }
 
+static void bag_add(struct pd_snapshot* s, int pocket, int item, int quantity);
+
 // Legends Awakening (exact ROM SHA): read-only standard BagPocket decoder.
 // The expansion's BagPocket is 8 bytes: pointer (4), 10-bit capacity and
 // 6-bit pocket ID (2), padding (2). ItemSlot is 4 bytes (u16 ID, u16 qty).
